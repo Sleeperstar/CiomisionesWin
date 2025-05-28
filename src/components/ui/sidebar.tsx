@@ -1,3 +1,4 @@
+
 "use client"
 
 import * as React from "react"
@@ -262,7 +263,7 @@ Sidebar.displayName = "Sidebar"
 const SidebarTrigger = React.forwardRef<
   React.ElementRef<typeof Button>,
   React.ComponentProps<typeof Button>
->(({ className, onClick, ...props }, ref) => {
+>(({ className, onClick, children, asChild, ...props }, ref) => {
   const { toggleSidebar } = useSidebar()
 
   return (
@@ -276,10 +277,16 @@ const SidebarTrigger = React.forwardRef<
         onClick?.(event)
         toggleSidebar()
       }}
-      {...props}
+      asChild={asChild} // Pass asChild explicitly
+      {...props} // Pass the rest of the props
     >
-      <PanelLeft />
-      <span className="sr-only">Toggle Sidebar</span>
+      {/* Conditionally render children for the underlying Button */}
+      {asChild ? children : (
+        <>
+          <PanelLeft />
+          <span className="sr-only">Toggle Sidebar</span>
+        </>
+      )}
     </Button>
   )
 })
@@ -761,3 +768,5 @@ export {
   SidebarTrigger,
   useSidebar,
 }
+
+    
