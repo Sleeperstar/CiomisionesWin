@@ -1,9 +1,9 @@
-# **App Name**: ComisionesPro
+# **App Name**: WinComisiones
 
 ## Core Features:
 
 - Main Navigation: Main navigation component with links to Dashboard, Agencies, Upload Sales, and Settings.
-- Dashboard Display: Dashboard component displaying 'ComisionesPro' title.
+- Dashboard Display: Dashboard component displaying 'WinComisiones' title.
 - CSV File Upload: Handles CSV files uploads containing the sales records to calculate commission based on defined business rules.
 - Smart Validation Tool: Based on the provided business rules, determine when records need manual validation and generate a reasoning output indicating which commission to adjust. It acts as a validation tool and it only lists the discrepancies.
 - Agencies Configuration: Configuration form to setup Agencies' information like contact and addresses

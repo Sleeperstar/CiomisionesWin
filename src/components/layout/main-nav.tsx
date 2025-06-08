@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { Icons } from "@/components/icons";
 import {
@@ -14,7 +15,7 @@ import {
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { useTheme } from "next-themes"; // Assuming next-themes is or will be installed for theme toggling
+import { useTheme } from "next-themes";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: Icons.Dashboard },
@@ -39,7 +40,7 @@ export function MainNav() {
             <path d="M2 12l10 5 10-5"></path>
           </svg>
           <h1 className="text-xl font-semibold text-sidebar-primary-foreground group-data-[collapsible=icon]:hidden">
-            ComisionesPro
+            WinComisiones
           </h1>
         </Link>
       </SidebarHeader>
@@ -67,7 +68,16 @@ export function MainNav() {
           ))}
         </SidebarMenu>
       </SidebarContent>
-      <SidebarFooter className="p-2 group-data-[collapsible=icon]:p-0 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:flex">
+      <SidebarFooter className="flex flex-col items-center p-4 group-data-[collapsible=icon]:p-2">
+        <div className="mb-4 group-data-[collapsible=icon]:hidden">
+          <Image
+            src="/Win_logo2.png"
+            alt="WinComisiones Logo"
+            width={150}
+            height={75}
+            className="object-contain" // Removed border classes
+          />
+        </div>
         <Button
           variant="ghost"
           size="icon"

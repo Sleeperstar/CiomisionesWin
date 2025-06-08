@@ -8,7 +8,7 @@ export default function DashboardPage() {
       <Card className="shadow-lg">
         <CardHeader>
           <CardTitle className="text-3xl font-bold tracking-tight text-primary">
-            Welcome to ComisionesPro
+            Welcome to WinComisiones
           </CardTitle>
           <CardDescription className="text-lg">
             Your intelligent sales commission management platform.

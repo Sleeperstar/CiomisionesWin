@@ -46,7 +46,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </header>
         <main className="flex-1 p-4 sm:p-6">{children}</main>
         <footer className="border-t p-4 text-center text-sm text-muted-foreground">
-          © {new Date().getFullYear()} ComisionesPro. All rights reserved.
+          © {new Date().getFullYear()} WinComisiones. All rights reserved.
         </footer>
       </SidebarInset>
     </SidebarProvider>

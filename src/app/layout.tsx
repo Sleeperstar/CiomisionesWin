@@ -16,7 +16,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'ComisionesPro',
+  title: 'WinComisiones',
   description: 'Sales Commission Management Tool',
 };
 

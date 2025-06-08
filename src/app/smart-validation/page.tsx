@@ -170,7 +170,7 @@ export default function SmartValidationPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <Alert variant={validationResult.needsValidation ? "destructive" : "default"}>
-              <Icons.ShieldCheck className="h-5 w-5" />
+              <Icons.SmartValidation className="h-5 w-5" />
               <AlertTitle className="font-semibold">
                 {validationResult.needsValidation
                   ? "Manual Validation Required"
