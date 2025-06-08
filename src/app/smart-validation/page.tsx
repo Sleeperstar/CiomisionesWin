@@ -24,32 +24,32 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 
 const exampleSalesRecord = JSON.stringify({
-  "saleId": "S1001",
-  "product": "Enterprise Suite",
-  "amount": 12000,
-  "commissionRate": 0.10,
-  "calculatedCommission": 1200,
-  "salesRep": "John Doe",
-  "region": "North America",
-  "notes": "Customer requested a 5% discount, approved."
+  "idVenta": "V1001",
+  "producto": "Suite Empresarial",
+  "monto": 12000,
+  "tasaComision": 0.10,
+  "comisionCalculada": 1200,
+  "representanteVentas": "Juan Pérez",
+  "region": "América del Norte",
+  "notas": "El cliente solicitó un 5% de descuento, aprobado."
 }, null, 2);
 
 const exampleCommissionRules = JSON.stringify({
-  "standardRate": 0.10,
-  "tierThresholds": [
-    { "amount": 10000, "rate": 0.12 },
-    { "amount": 20000, "rate": 0.15 }
+  "tasaEstandar": 0.10,
+  "umbralesNivel": [
+    { "monto": 10000, "tasa": 0.12 },
+    { "monto": 20000, "tasa": 0.15 }
   ],
-  "productSpecificRates": {
-    "Basic Plan": 0.08,
-    "Enterprise Suite": 0.10 // Standard, but could be overridden
+  "tasasEspecificasProducto": {
+    "Plan Básico": 0.08,
+    "Suite Empresarial": 0.10 // Estándar, pero podría ser sobrescrito
   },
-  "regionBonuses": {
-    "EMEA": 0.01 // Additional 1% for EMEA
+  "bonosRegion": {
+    "EMEA": 0.01 // 1% adicional para EMEA
   },
-  "validationRules": [
-    "Commission cannot exceed 20% of sale amount.",
-    "Discounts over 10% require manager approval (not reflected in data, flag for check)."
+  "reglasValidacion": [
+    "La comisión no puede exceder el 20% del monto de la venta.",
+    "Descuentos superiores al 10% requieren aprobación del gerente (no reflejado en los datos, marcar para revisión)."
   ]
 }, null, 2);
 
@@ -77,14 +77,14 @@ export default function SmartValidationPage() {
       });
       setValidationResult(result);
       toast({
-        title: "Validation Complete",
-        description: result.needsValidation ? "Record needs manual review." : "Record appears valid.",
+        title: "Validación Completa",
+        description: result.needsValidation ? "El registro necesita revisión manual." : "El registro parece válido.",
       });
     } catch (error: any) {
-      console.error("Validation error:", error);
+      console.error("Error de validación:", error);
       toast({
-        title: "Validation Error",
-        description: error.message || "An unexpected error occurred.",
+        title: "Error de Validación",
+        description: error.message || "Ocurrió un error inesperado.",
         variant: "destructive",
       });
     } finally {
@@ -98,10 +98,10 @@ export default function SmartValidationPage() {
         <CardHeader>
           <CardTitle className="text-2xl flex items-center gap-2">
             <Icons.SmartValidation className="h-6 w-6 text-primary" />
-            Smart Sales Data Validation Tool
+            Herramienta de Validación Inteligente de Datos de Ventas
           </CardTitle>
           <CardDescription>
-            Use AI to validate sales records against commission rules and identify discrepancies.
+            Usa IA para validar registros de ventas contra las reglas de comisión e identificar discrepancias.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -112,16 +112,16 @@ export default function SmartValidationPage() {
                 name="salesRecord"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Sales Record (JSON)</FormLabel>
+                    <FormLabel>Registro de Venta (JSON)</FormLabel>
                     <FormControl>
                       <Textarea
-                        placeholder="Enter sales record as a JSON string..."
+                        placeholder="Ingresa el registro de venta como una cadena JSON..."
                         className="min-h-[150px] font-mono text-sm"
                         {...field}
                       />
                     </FormControl>
                     <FormDescription>
-                      Provide the sales data in JSON format.
+                      Proporciona los datos de la venta en formato JSON.
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
@@ -132,16 +132,16 @@ export default function SmartValidationPage() {
                 name="commissionRules"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Commission Rules (JSON)</FormLabel>
+                    <FormLabel>Reglas de Comisión (JSON)</FormLabel>
                     <FormControl>
                       <Textarea
-                        placeholder="Enter commission rules as a JSON string..."
+                        placeholder="Ingresa las reglas de comisión como una cadena JSON..."
                         className="min-h-[150px] font-mono text-sm"
                         {...field}
                       />
                     </FormControl>
                     <FormDescription>
-                      Define the commission rules in JSON format.
+                      Define las reglas de comisión en formato JSON.
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
@@ -154,9 +154,9 @@ export default function SmartValidationPage() {
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
-                    Validating...
+                    Validando...
                   </div>
-                ) : "Validate Data"}
+                ) : "Validar Datos"}
               </Button>
             </form>
           </Form>
@@ -166,29 +166,29 @@ export default function SmartValidationPage() {
       {validationResult && (
         <Card className="shadow-lg">
           <CardHeader>
-            <CardTitle className="text-xl">Validation Result</CardTitle>
+            <CardTitle className="text-xl">Resultado de la Validación</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <Alert variant={validationResult.needsValidation ? "destructive" : "default"}>
               <Icons.SmartValidation className="h-5 w-5" />
               <AlertTitle className="font-semibold">
                 {validationResult.needsValidation
-                  ? "Manual Validation Required"
-                  : "Record Appears Valid"}
+                  ? "Se Requiere Validación Manual"
+                  : "El Registro Parece Válido"}
               </AlertTitle>
               <AlertDescription>{validationResult.reason}</AlertDescription>
             </Alert>
             
             {validationResult.suggestedCommissionAdjustment && (
                <div className="p-4 border rounded-md bg-secondary/50">
-                <h4 className="font-semibold text-secondary-foreground mb-1">Suggested Commission Adjustment:</h4>
+                <h4 className="font-semibold text-secondary-foreground mb-1">Ajuste de Comisión Sugerido:</h4>
                 <p className="text-sm text-secondary-foreground">{validationResult.suggestedCommissionAdjustment}</p>
               </div>
             )}
           </CardContent>
            <CardFooter>
             <Badge variant={validationResult.needsValidation ? "destructive" : "default"}>
-              Status: {validationResult.needsValidation ? "Needs Review" : "OK"}
+              Estado: {validationResult.needsValidation ? "Necesita Revisión" : "OK"}
             </Badge>
            </CardFooter>
         </Card>

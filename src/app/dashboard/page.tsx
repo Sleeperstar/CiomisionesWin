@@ -8,25 +8,25 @@ export default function DashboardPage() {
       <Card className="shadow-lg">
         <CardHeader>
           <CardTitle className="text-3xl font-bold tracking-tight text-primary">
-            Welcome to WinComisiones
+            Bienvenido a WinComisiones
           </CardTitle>
           <CardDescription className="text-lg">
-            Your intelligent sales commission management platform.
+            Tu plataforma inteligente para la gestión de comisiones de ventas.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <p className="mb-4">
-            Navigate using the sidebar to manage agencies, upload sales data, validate commissions, and configure settings.
+            Navega usando la barra lateral para administrar agencias, subir datos de ventas, validar comisiones y configurar tus ajustes.
           </p>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            <StatCard title="Total Agencies" value="12" icon={<Icons.Agencies className="h-6 w-6 text-primary" />} />
-            <StatCard title="Sales Records Pending" value="150" icon={<Icons.UploadSales className="h-6 w-6 text-primary" />} />
-            <StatCard title="Validations Needed" value="5" icon={<Icons.SmartValidation className="h-6 w-6 text-destructive" />} />
+            <StatCard title="Total de Agencias" value="12" icon={<Icons.Agencies className="h-6 w-6 text-primary" />} />
+            <StatCard title="Registros de Ventas Pendientes" value="150" icon={<Icons.UploadSales className="h-6 w-6 text-primary" />} />
+            <StatCard title="Validaciones Necesarias" value="5" icon={<Icons.SmartValidation className="h-6 w-6 text-destructive" />} />
           </div>
            <div className="mt-6 rounded-lg overflow-hidden shadow-md">
             <Image 
               src="https://placehold.co/1200x400.png" 
-              alt="Financial Dashboard Illustration" 
+              alt="Ilustración de Panel Financiero" 
               width={1200} 
               height={400} 
               className="w-full h-auto object-cover"
@@ -55,7 +55,7 @@ function StatCard({ title, value, icon }: StatCardProps) {
       <CardContent>
         <div className="text-2xl font-bold">{value}</div>
         <p className="text-xs text-muted-foreground">
-          +20.1% from last month (mock data)
+          +20.1% desde el mes pasado (datos de prueba)
         </p>
       </CardContent>
     </Card>

@@ -38,13 +38,13 @@ export default function AgenciesPage() {
   });
 
   function onSubmit(data: AgencyFormValues) {
-    // In a real app, you'd send this data to a server/API
+    // En una aplicación real, enviarías estos datos a un servidor/API
     console.log(data);
     toast({
-      title: "Agency Configuration Saved",
-      description: `Details for ${data.agencyName} have been (mock) saved.`,
+      title: "Configuración de Agencia Guardada",
+      description: `Los detalles para ${data.agencyName} han sido guardados (simulación).`,
     });
-    form.reset(); // Optionally reset form after submission
+    form.reset(); // Opcionalmente, resetea el formulario después de enviarlo
   }
 
   return (
@@ -52,10 +52,10 @@ export default function AgenciesPage() {
       <CardHeader>
         <CardTitle className="text-2xl flex items-center gap-2">
           <Icons.Agencies className="h-6 w-6 text-primary" />
-          Agency Configuration
+          Configuración de la Agencia
         </CardTitle>
         <CardDescription>
-          Set up or update information for an agency.
+          Configura o actualiza la información de una agencia.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -66,9 +66,9 @@ export default function AgenciesPage() {
               name="agencyName"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Agency Name</FormLabel>
+                  <FormLabel>Nombre de la Agencia</FormLabel>
                   <FormControl>
-                    <Input placeholder="Global Solutions Inc." {...field} />
+                    <Input placeholder="Soluciones Globales S.A." {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -80,9 +80,9 @@ export default function AgenciesPage() {
                 name="contactPerson"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Contact Person (Optional)</FormLabel>
+                    <FormLabel>Persona de Contacto (Opcional)</FormLabel>
                     <FormControl>
-                      <Input placeholder="Jane Doe" {...field} />
+                      <Input placeholder="Juan Pérez" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -93,9 +93,9 @@ export default function AgenciesPage() {
                 name="email"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Email</FormLabel>
+                    <FormLabel>Correo Electrónico</FormLabel>
                     <FormControl>
-                      <Input type="email" placeholder="contact@globalsolutions.com" {...field} />
+                      <Input type="email" placeholder="contacto@solucionesglobales.com" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -107,9 +107,9 @@ export default function AgenciesPage() {
               name="phone"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Phone (Optional)</FormLabel>
+                  <FormLabel>Teléfono (Opcional)</FormLabel>
                   <FormControl>
-                    <Input type="tel" placeholder="+1-555-123-4567" {...field} />
+                    <Input type="tel" placeholder="+52-55-1234-5678" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -120,9 +120,9 @@ export default function AgenciesPage() {
               name="addressLine1"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Address Line 1</FormLabel>
+                  <FormLabel>Dirección Línea 1</FormLabel>
                   <FormControl>
-                    <Input placeholder="123 Main Street" {...field} />
+                    <Input placeholder="Calle Principal 123" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -133,9 +133,9 @@ export default function AgenciesPage() {
               name="addressLine2"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Address Line 2 (Optional)</FormLabel>
+                  <FormLabel>Dirección Línea 2 (Opcional)</FormLabel>
                   <FormControl>
-                    <Input placeholder="Suite 4B" {...field} />
+                    <Input placeholder="Oficina 4B" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -147,9 +147,9 @@ export default function AgenciesPage() {
                 name="city"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>City</FormLabel>
+                    <FormLabel>Ciudad</FormLabel>
                     <FormControl>
-                      <Input placeholder="New York" {...field} />
+                      <Input placeholder="Ciudad de México" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -160,9 +160,9 @@ export default function AgenciesPage() {
                 name="state"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>State / Province</FormLabel>
+                    <FormLabel>Estado / Provincia</FormLabel>
                     <FormControl>
-                      <Input placeholder="NY" {...field} />
+                      <Input placeholder="CDMX" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -175,9 +175,9 @@ export default function AgenciesPage() {
                 name="zipCode"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Zip / Postal Code</FormLabel>
+                    <FormLabel>Código Postal</FormLabel>
                     <FormControl>
-                      <Input placeholder="10001" {...field} />
+                      <Input placeholder="06500" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -188,9 +188,9 @@ export default function AgenciesPage() {
                 name="country"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Country</FormLabel>
+                    <FormLabel>País</FormLabel>
                     <FormControl>
-                      <Input placeholder="United States" {...field} />
+                      <Input placeholder="México" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -198,7 +198,7 @@ export default function AgenciesPage() {
               />
             </div>
             <Button type="submit" className="w-full md:w-auto" disabled={form.formState.isSubmitting}>
-              {form.formState.isSubmitting ? "Saving..." : "Save Configuration"}
+              {form.formState.isSubmitting ? "Guardando..." : "Guardar Configuración"}
             </Button>
           </form>
         </Form>

@@ -18,7 +18,7 @@ export default function SettingsPage() {
 
 
   if (!mounted) {
-    return null; // Avoid hydration mismatch
+    return null; // Evita el desajuste de hidratación
   }
 
   return (
@@ -26,48 +26,48 @@ export default function SettingsPage() {
       <CardHeader>
         <CardTitle className="text-2xl flex items-center gap-2">
           <Icons.Settings className="h-6 w-6 text-primary" />
-          Application Settings
+          Configuración de la Aplicación
         </CardTitle>
         <CardDescription>
-          Manage your application preferences and configurations.
+          Administra tus preferencias y configuraciones de la aplicación.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
         <div className="space-y-2">
-          <h3 className="text-lg font-medium">Appearance</h3>
+          <h3 className="text-lg font-medium">Apariencia</h3>
           <div className="flex items-center justify-between p-3 border rounded-md">
             <Label htmlFor="dark-mode-switch" className="flex flex-col space-y-1">
-              <span>Dark Mode</span>
+              <span>Modo Oscuro</span>
               <span className="font-normal leading-snug text-muted-foreground">
-                Toggle between light and dark themes.
+                Alterna entre temas claro y oscuro.
               </span>
             </Label>
             <Switch
               id="dark-mode-switch"
               checked={theme === "dark"}
               onCheckedChange={(checked) => setTheme(checked ? "dark" : "light")}
-              aria-label="Toggle dark mode"
+              aria-label="Alternar modo oscuro"
             />
           </div>
         </div>
         
         <div className="space-y-2">
-          <h3 className="text-lg font-medium">Notifications</h3>
+          <h3 className="text-lg font-medium">Notificaciones</h3>
           <div className="flex items-center justify-between p-3 border rounded-md">
              <Label htmlFor="email-notifications" className="flex flex-col space-y-1">
-              <span>Email Notifications</span>
+              <span>Notificaciones por Correo</span>
               <span className="font-normal leading-snug text-muted-foreground">
-                Receive email updates and alerts.
+                Recibir actualizaciones y alertas por correo.
               </span>
             </Label>
-            <Switch id="email-notifications" defaultChecked aria-label="Toggle email notifications"/>
+            <Switch id="email-notifications" defaultChecked aria-label="Alternar notificaciones por correo"/>
           </div>
         </div>
 
         <div className="space-y-2">
-          <h3 className="text-lg font-medium">Data &amp; Privacy</h3>
-           <Button variant="outline">Export My Data</Button>
-           <Button variant="destructive" className="ml-2">Delete My Account</Button>
+          <h3 className="text-lg font-medium">Datos y Privacidad</h3>
+           <Button variant="outline">Exportar Mis Datos</Button>
+           <Button variant="destructive" className="ml-2">Eliminar Mi Cuenta</Button>
         </div>
         
       </CardContent>

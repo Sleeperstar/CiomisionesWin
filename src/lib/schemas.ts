@@ -1,10 +1,10 @@
 import { z } from 'zod';
 
 export const agencyFormSchema = z.object({
-  agencyName: z.string().min(2, { message: "Agency name must be at least 2 characters." }).max(100),
+  agencyName: z.string().min(2, { message: "El nombre de la agencia debe tener al menos 2 caracteres." }).max(100),
   contactPerson: z.string().min(2).max(100).optional(),
-  email: z.string().email({ message: "Invalid email address." }),
-  phone: z.string().min(10, { message: "Phone number must be at least 10 digits." }).max(15).optional(),
+  email: z.string().email({ message: "Dirección de correo electrónico inválida." }),
+  phone: z.string().min(10, { message: "El número de teléfono debe tener al menos 10 dígitos." }).max(15).optional(),
   addressLine1: z.string().min(5).max(100),
   addressLine2: z.string().max(100).optional(),
   city: z.string().min(2).max(50),
@@ -25,8 +25,8 @@ export const smartValidationSchema = z.object({
         return false;
       }
     },
-    { message: "Sales record must be a valid JSON string." }
-  ).describe('A JSON string containing the sales record to validate.'),
+    { message: "El registro de ventas debe ser una cadena JSON válida." }
+  ).describe('Una cadena JSON que contiene el registro de ventas a validar.'),
   commissionRules: z.string().refine(
     (val) => {
       try {
@@ -36,8 +36,8 @@ export const smartValidationSchema = z.object({
         return false;
       }
     },
-    { message: "Commission rules must be a valid JSON string." }
-  ).describe('A JSON string containing the commission rules to validate against.'),
+    { message: "Las reglas de comisión deben ser una cadena JSON válida." }
+  ).describe('Una cadena JSON que contiene las reglas de comisión contra las cuales validar.'),
 });
 
 export type SmartValidationFormValues = z.infer<typeof smartValidationSchema>;

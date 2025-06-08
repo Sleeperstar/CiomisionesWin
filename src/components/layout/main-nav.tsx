@@ -18,11 +18,11 @@ import { cn } from "@/lib/utils";
 import { useTheme } from "next-themes";
 
 const navItems = [
-  { href: "/dashboard", label: "Dashboard", icon: Icons.Dashboard },
-  { href: "/agencies", label: "Agencies", icon: Icons.Agencies },
-  { href: "/upload-sales", label: "Upload Sales", icon: Icons.UploadSales },
-  { href: "/smart-validation", label: "Smart Validation", icon: Icons.SmartValidation },
-  { href: "/settings", label: "Settings", icon: Icons.Settings },
+  { href: "/dashboard", label: "Panel de Control", icon: Icons.Dashboard },
+  { href: "/agencies", label: "Agencias", icon: Icons.Agencies },
+  { href: "/upload-sales", label: "Subir Ventas", icon: Icons.UploadSales },
+  { href: "/smart-validation", label: "Validación Inteligente", icon: Icons.SmartValidation },
+  { href: "/settings", label: "Configuración", icon: Icons.Settings },
 ];
 
 export function MainNav() {
@@ -83,7 +83,7 @@ export function MainNav() {
           size="icon"
           className="h-8 w-8 text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground group-data-[collapsible=icon]:h-10 group-data-[collapsible=icon]:w-10"
           onClick={() => setTheme(theme === "light" ? "dark" : "light")}
-          title={`Switch to ${theme === "light" ? "dark" : "light"} mode`}
+          title={`Cambiar a modo ${theme === "light" ? "oscuro" : "claro"}`}
         >
           {theme === "light" ? <Icons.Moon /> : <Icons.Sun />}
           <span className="sr-only">Toggle theme</span>
