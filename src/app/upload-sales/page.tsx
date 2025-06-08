@@ -7,12 +7,35 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useToast } from "@/hooks/use-toast";
 import { Icons } from "@/components/icons";
 import { Label } from '@/components/ui/label';
-import { supabase } from '@/lib/supabase'; // Importa el cliente de Supabase
-import Papa from 'papaparse'; // Importa Papaparse
+import { supabase } from '@/lib/supabase';
+import Papa, { ParseResult } from 'papaparse';
+import { Progress } from "@/components/ui/progress";
+
+const BATCH_SIZE = 500;
+
+// Columnas de tipo TIMESTAMP
+const TIMESTAMP_FIELDS = [
+    "FECHA_VENTA", "FECHA_VALIDACION", "INSTALADO_REGISTRO", "FECHA_INSTALADO",
+    "WS_RECIBO1_EMISION", "RECIBO1_PAGADO", "WS_RECIBO2_EMISION", "RECIBO2_PAGADO",
+    "WS_2PAGOC_EMISION", "2_PAGOS_COMPLETOS", "WS_RECIBO3_EMISION", "RECIBO3_PAGADO"
+];
+
+// Columnas de tipo INTEGER o BIGINT
+const INTEGER_FIELDS = [
+    "COD_PEDIDO", "ID_PREDIO", "ANCHO_BANDA", "WIN_BOX", "PLAN_GAMER", "PLAN_WIN_TV", "PLAN_DTV_GO",
+    "PLAN_DTV_FULL", "WIN_GAMES", "FONO_WIN", "PLAN_DGO_L1MAX", "PLAN_L1MAX", "PLAN_WIN_TV_PLUS",
+    "PLAN_WIN_TV_PREMIUM", "PLAN_WIN_TV_L1MAX", "PLAN_WIN_TV_L1MAX_PREMIUM", "HEREDADO", 
+    "INSTALADO", "CODIGO_INSTALADO", "PERIODO", "PERIODO_ALTA"
+];
+
+// Columnas de tipo DOUBLE PRECISION (float)
+const FLOAT_FIELDS = ["PRECIO_CON_IGV", "PRECIO_CON_IGV_EXTERNO"];
 
 export default function UploadSalesPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [isTesting, setIsTesting] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const { toast } = useToast();
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -20,6 +43,7 @@ export default function UploadSalesPage() {
       const file = event.target.files[0];
       if (file.type === "text/csv" || file.name.endsWith(".csv")) {
         setSelectedFile(file);
+        setUploadProgress(0);
       } else {
         toast({
           title: "Tipo de Archivo Inválido",
@@ -27,77 +51,103 @@ export default function UploadSalesPage() {
           variant: "destructive",
         });
         setSelectedFile(null);
-        event.target.value = "";
+        if (event.target) event.target.value = "";
       }
     }
+  };
+
+  const handleTestConnection = async () => {
+    setIsTesting(true);
+    toast({ title: "Probando conexión..." });
+    const testRecord = { COD_PEDIDO: Math.floor(Date.now() / 1000), DNI_CLIENTE: "12345678", DEPARTAMENTO: "LIMA", PROVINCIA: "LIMA", DISTRITO: "MIRAFLORES", ID_PREDIO: 101, PREDIO: "PREDIO DE PRUEBA", FECHA_VENTA: new Date().toISOString(), TIPO_VENTA: "NUEVA", PRECIO_CON_IGV: 99.90, ORIGEN_VENTA: "TEST_CONNECTION", DNI_ASESOR: "87654321", ASESOR: "ASESOR DE PRUEBA", CANAL: "PRUEBA", TIPO_ESTADO: "ACTIVO", PROCESADO: "NO", INSTALADO: 0, PERIODO: 202401, PERIODO_ALTA: 202401 };
+    const { error } = await supabase.from('SalesRecord').insert([testRecord]);
+    if (error) {
+      toast({ title: "Error de Conexión", description: `No se pudo insertar el registro de prueba: ${error.message}`, variant: "destructive" });
+    } else {
+      toast({ title: "Conexión Exitosa", description: "El registro de prueba se ha insertado correctamente." });
+    }
+    setIsTesting(false);
   };
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!selectedFile) {
-      toast({
-        title: "No se ha seleccionado ningún archivo",
-        description: "Por favor, selecciona un archivo CSV para subir.",
-        variant: "destructive",
-      });
+      toast({ title: "No se ha seleccionado ningún archivo", variant: "destructive" });
       return;
     }
-
     setIsUploading(true);
-    toast({
-      title: "Procesando archivo...",
-      description: "Por favor, espera mientras se procesan los datos del CSV.",
-    });
+    setUploadProgress(0);
+    toast({ title: "Iniciando subida...", description: "El archivo se está procesando y limpiando." });
 
+    let totalRows = 0;
+    const fileTotalSize = selectedFile.size;
+    let recordsToUpload: any[] = [];
+
+    const processBatch = async (batch: any[]) => {
+      if (batch.length === 0) return;
+      const { error } = await supabase.from('SalesRecord').upsert(batch, { onConflict: 'COD_PEDIDO' });
+      if (error) throw new Error(`Error en Supabase: ${error.message}`);
+    };
+    
     Papa.parse(selectedFile, {
-      header: true, // Convierte las filas en objetos usando las cabeceras
+      header: true,
       skipEmptyLines: true,
-      complete: async (results) => {
-        const data = results.data;
-        
-        if (data.length === 0) {
-          toast({
-            title: "Archivo Vacío o Inválido",
-            description: "El archivo CSV no contiene datos para procesar.",
-            variant: "destructive",
-          });
-          setIsUploading(false);
-          return;
+      transform: (value, header) => {
+        const headerStr = String(header).trim();
+        if (value === '' || value === null) {
+          return null; // Convierte cualquier celda vacía en null
         }
-
-        // 'upsert' insertará nuevos registros y actualizará los existentes.
-        // Asegúrate de que tu tabla 'SalesRecord' tiene una clave primaria (ej: 'id')
-        // para que 'upsert' pueda funcionar correctamente.
-        const { error } = await supabase.from('SalesRecord').upsert(data, {
-          // Si tu clave primaria no se llama 'id', especifícala aquí.
-          // onConflict: 'tu_clave_primaria' 
-        });
-
-        setIsUploading(false);
-
-        if (error) {
-          toast({
-            title: "Error al Subir los Datos",
-            description: `Hubo un problema al guardar los datos en Supabase: ${error.message}`,
-            variant: "destructive",
-          });
-        } else {
-          toast({
-            title: "Subida Exitosa",
-            description: `${data.length} registros han sido procesados y guardados correctamente.`,
-          });
+        if (INTEGER_FIELDS.includes(headerStr)) {
+          const parsed = parseInt(value, 10);
+          return isNaN(parsed) ? null : parsed; // "1.0" se convierte en 1
+        }
+        if (FLOAT_FIELDS.includes(headerStr)) {
+          const parsed = parseFloat(value);
+          return isNaN(parsed) ? null : parsed; // "99.90" se convierte en 99.9
+        }
+        if (TIMESTAMP_FIELDS.includes(headerStr)) {
+           // Si el valor no es una fecha válida, se convertirá en null al fallar la inserción
+           // o puedes añadir validación aquí si es necesario. Por ahora, confiamos en el formato.
+           return value;
+        }
+        return value;
+      },
+      chunk: async (results: ParseResult<any>, parser) => {
+        parser.pause();
+        try {
+          recordsToUpload.push(...results.data);
+          totalRows += results.data.length;
+          if (recordsToUpload.length >= BATCH_SIZE) {
+            await processBatch(recordsToUpload);
+            recordsToUpload = [];
+          }
+          const progress = fileTotalSize > 0 ? (results.meta.cursor / fileTotalSize) * 100 : 0;
+          setUploadProgress(progress);
+        } catch (error: any) {
+          parser.abort();
+          setIsUploading(false);
+          toast({ title: "Error al Subir Lote", description: error.message, variant: "destructive" });
+        }
+        parser.resume();
+      },
+      complete: async () => {
+        try {
+          await processBatch(recordsToUpload);
+          setUploadProgress(100);
+          toast({ title: "Subida Completada", description: `Se han procesado ${totalRows} registros.` });
+        } catch (error: any) {
+          toast({ title: "Error al Subir Lote Final", description: error.message, variant: "destructive" });
+        } finally {
+          setIsUploading(false);
           setSelectedFile(null);
-          const fileInput = event.currentTarget.querySelector('input[type="file"]') as HTMLInputElement | null;
+          const fileInput = document.getElementById("csvFile") as HTMLInputElement | null;
           if (fileInput) fileInput.value = "";
+          setTimeout(() => setUploadProgress(0), 2000);
         }
       },
       error: (error) => {
         setIsUploading(false);
-        toast({
-          title: "Error al Leer el Archivo",
-          description: `No se pudo procesar el archivo CSV: ${error.message}`,
-          variant: "destructive",
-        });
+        toast({ title: "Error al Leer el Archivo", description: error.message, variant: "destructive" });
       }
     });
   };
@@ -105,48 +155,36 @@ export default function UploadSalesPage() {
   return (
     <Card className="shadow-lg max-w-lg mx-auto">
       <CardHeader>
-        <CardTitle className="text-2xl flex items-center gap-2">
-          <Icons.UploadSales className="h-6 w-6 text-primary" />
-          Subir Registros de Ventas
-        </CardTitle>
-        <CardDescription>
-          Sube un archivo CSV que contenga los registros de ventas para el cálculo de comisiones.
-        </CardDescription>
+        <CardTitle className="text-2xl flex items-center gap-2"><Icons.UploadSales />Subir Registros de Ventas</CardTitle>
+        <CardDescription>Prueba la conexión y luego sube tu archivo CSV. Los datos se limpiarán automáticamente.</CardDescription>
       </CardHeader>
-      <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div>
-            <Label htmlFor="csvFile" className="mb-2 block text-sm font-medium">Archivo CSV de Ventas</Label>
-            <Input
-              id="csvFile"
-              type="file"
-              accept=".csv"
-              onChange={handleFileChange}
-              className="file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
-              disabled={isUploading}
-            />
-            {selectedFile && (
-              <p className="mt-2 text-sm text-muted-foreground">
-                Archivo seleccionado: {selectedFile.name} ({(selectedFile.size / 1024).toFixed(2)} KB)
-              </p>
-            )}
-          </div>
-          <Button type="submit" className="w-full" disabled={!selectedFile || isUploading}>
-            {isUploading ? (
-              <div className="flex items-center">
-                <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                Subiendo...
-              </div>
-            ) : (
-              "Subir y Procesar"
-            )}
+      <CardContent className="space-y-6">
+        <div className="space-y-2">
+          <Label>Paso 1: Probar la Conexión</Label>
+          <Button onClick={handleTestConnection} variant="outline" className="w-full" disabled={isTesting || isUploading}>
+            {isTesting ? "Probando..." : "Probar Conexión a Supabase"}
           </Button>
-        </form>
+        </div>
+        <div className="border-t pt-6">
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div>
+              <Label htmlFor="csvFile">Paso 2: Subir Archivo CSV</Label>
+              <Input id="csvFile" type="file" accept=".csv" onChange={handleFileChange} disabled={isUploading || isTesting} />
+              {selectedFile && <p className="mt-2 text-sm text-muted-foreground">{selectedFile.name}</p>}
+            </div>
+            {(isUploading && selectedFile) && (
+              <div className="space-y-2">
+                <Label>Progreso de la Subida</Label>
+                <Progress value={uploadProgress} />
+                <p className="text-sm text-muted-foreground">{Math.round(uploadProgress)}% completado</p>
+              </div>
+            )}
+            <Button type="submit" className="w-full" disabled={!selectedFile || isUploading || isTesting}>
+              {isUploading ? "Subiendo..." : "Subir y Procesar CSV"}
+            </Button>
+          </form>
+        </div>
       </CardContent>
     </Card>
   );
 }
-
