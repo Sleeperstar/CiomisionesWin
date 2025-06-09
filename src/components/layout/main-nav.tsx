@@ -1,3 +1,4 @@
+
 "use client";
 
 import Link from "next/link";
@@ -73,11 +74,12 @@ export function MainNav() {
       <SidebarFooter className="flex flex-col items-center p-4 group-data-[collapsible=icon]:p-2">
         <div className="mb-4 group-data-[collapsible=icon]:hidden">
           <Image
-            src="/Win_logo2.png"
-            alt="WinComisiones Logo"
+            src="https://placehold.co/150x75.png"
+            alt="WinComisiones Logo Placeholder"
             width={150}
             height={75}
-            className="object-contain" // Removed border classes
+            className="object-contain"
+            data-ai-hint="logo abstract"
           />
         </div>
         <Button
