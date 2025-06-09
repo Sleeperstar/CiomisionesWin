@@ -17,6 +17,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useTheme } from "next-themes";
+import React, { useState, useEffect } from 'react';
+
 
 const navItems = [
   { href: "/dashboard", label: "Panel de Control", icon: Icons.Dashboard },
@@ -31,6 +33,11 @@ const navItems = [
 export function MainNav() {
   const pathname = usePathname();
   const { theme, setTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   return (
     <Sidebar variant="sidebar" collapsible="icon" side="left">
@@ -74,24 +81,26 @@ export function MainNav() {
       <SidebarFooter className="flex flex-col items-center p-4 group-data-[collapsible=icon]:p-2">
         <div className="mb-4 group-data-[collapsible=icon]:hidden">
           <Image
-            src="https://placehold.co/150x75.png"
-            alt="WinComisiones Logo Placeholder"
+            src="/Win_logo2.png"
+            alt="WinComisiones Logo"
             width={150}
             height={75}
             className="object-contain"
             data-ai-hint="logo abstract"
           />
         </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8 text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground group-data-[collapsible=icon]:h-10 group-data-[collapsible=icon]:w-10"
-          onClick={() => setTheme(theme === "light" ? "dark" : "light")}
-          title={`Cambiar a modo ${theme === "light" ? "oscuro" : "claro"}`}
-        >
-          {theme === "light" ? <Icons.Moon /> : <Icons.Sun />}
-          <span className="sr-only">Toggle theme</span>
-        </Button>
+        {mounted && (
+            <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground group-data-[collapsible=icon]:h-10 group-data-[collapsible=icon]:w-10"
+                onClick={() => setTheme(theme === "light" ? "dark" : "light")}
+                title={`Cambiar a modo ${theme === "light" ? "oscuro" : "claro"}`}
+            >
+                {theme === "light" ? <Icons.Moon /> : <Icons.Sun />}
+                <span className="sr-only">Toggle theme</span>
+            </Button>
+        )}
       </SidebarFooter>
     </Sidebar>
   );
