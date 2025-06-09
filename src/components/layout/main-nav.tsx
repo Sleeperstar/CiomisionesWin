@@ -22,6 +22,8 @@ const navItems = [
   { href: "/agencies", label: "Agencias", icon: Icons.Agencies },
   { href: "/upload-sales", label: "Subir Ventas", icon: Icons.UploadSales },
   { href: "/smart-validation", label: "Validación Inteligente", icon: Icons.SmartValidation },
+  // AÑADIDO: Nuevo enlace para el cálculo de comisiones
+  { href: "/commissions", label: "Calcular Comisiones", icon: Icons.Analytics },
   { href: "/settings", label: "Configuración", icon: Icons.Settings },
 ];
 

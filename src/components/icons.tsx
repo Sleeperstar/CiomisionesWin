@@ -8,6 +8,9 @@ import {
   ChevronRight,
   Moon,
   Sun,
+  BarChart, 
+  Save,     
+  Loader,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -19,8 +22,11 @@ export const Icons = {
   UploadSales: UploadCloud,
   SmartValidation: ShieldCheck,
   Settings: Settings,
+  Analytics: BarChart,
+  Save: Save,
   ChevronLeft,
   ChevronRight,
   Moon,
   Sun,
+  Spinner: Loader,
 };
