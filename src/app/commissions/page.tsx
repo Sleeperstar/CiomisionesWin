@@ -1,48 +1,84 @@
 "use client";
 
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Icons } from "@/components/icons";
-import UploadParameters from "@/components/commissions/upload-parameters";
-import TableAnalysis from "@/components/commissions/table-analysis";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
 
-export default function CommissionsPage() {
+const cortes = [
+  { value: "corte-1", label: "Corte 1" },
+  { value: "corte-2", label: "Corte 2" },
+  { value: "corte-3", label: "Corte 3" },
+  { value: "corte-4", label: "Corte 4" },
+];
+
+const zonas = [
+  { value: "lima", label: "Lima" },
+  { value: "provincia", label: "Provincia" },
+];
+
+export default function SelectCommissionScopePage() {
+  const router = useRouter();
+  const [corte, setCorte] = useState<string>("");
+  const [zona, setZona] = useState<string>("");
+
+  const handleContinue = () => {
+    if (corte && zona) {
+      router.push(`/commissions/${corte}/${zona}`);
+    }
+  };
+
   return (
-    <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
-      <div className="flex items-center justify-between space-y-2">
-        <h2 className="text-3xl font-bold tracking-tight">Cálculo de Comisiones</h2>
-      </div>
+    <div className="flex-1 space-y-4 p-4 md:p-8 pt-6 flex justify-center items-center">
+      <Card className="w-full max-w-md">
+        <CardHeader>
+          <CardTitle>Seleccionar Escenario</CardTitle>
+          <CardDescription>
+            Elige el corte y la zona para el cálculo de comisiones.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="corte-select">Corte</Label>
+              <Select onValueChange={setCorte} value={corte}>
+                <SelectTrigger id="corte-select">
+                  <SelectValue placeholder="Seleccione un corte..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {cortes.map((c) => (
+                    <SelectItem key={c.value} value={c.value}>
+                      {c.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
-      <Tabs defaultValue="upload_parameters" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="upload_parameters">
-            <Icons.Settings className="mr-2 h-4 w-4" />
-            Subir Parámetros
-          </TabsTrigger>
-          <TabsTrigger value="table_analysis">
-            <Icons.Analytics className="mr-2 h-4 w-4" />
-            Análisis de Tablas
-          </TabsTrigger>
-        </TabsList>
+            <div className="space-y-2">
+              <Label htmlFor="zona-select">Zona</Label>
+              <Select onValueChange={setZona} value={zona}>
+                <SelectTrigger id="zona-select">
+                  <SelectValue placeholder="Seleccione una zona..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {zonas.map((z) => (
+                    <SelectItem key={z.value} value={z.value}>
+                      {z.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
-        <TabsContent value="upload_parameters">
-          <Card>
-            <CardHeader>
-              <CardTitle>Parámetros de Comisión</CardTitle>
-              <CardDescription>
-                Define los valores y condiciones para el cálculo de las comisiones de los asesores.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <UploadParameters />
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="table_analysis">
-            <TableAnalysis />
-        </TabsContent>
-      </Tabs>
+            <Button onClick={handleContinue} disabled={!corte || !zona} className="w-full">
+              Continuar
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
