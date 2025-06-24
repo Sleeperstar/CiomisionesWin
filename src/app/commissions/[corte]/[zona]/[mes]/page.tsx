@@ -15,8 +15,8 @@ function formatTitle(slug: string) {
     .join(' ');
 }
 
-export default function CommissionCalculationPage({ params }: { params: { corte: string; zona: string } }) {
-  const { corte, zona } = params;
+export default function CommissionCalculationPage({ params }: { params: { corte: string; zona: string; mes: string } }) {
+  const { corte, zona, mes } = params;
 
   // As per your request, only "Corte 1" and "Lima" are currently implemented.
   const isImplemented = corte === 'corte-1' && zona === 'lima';
@@ -25,7 +25,7 @@ export default function CommissionCalculationPage({ params }: { params: { corte:
     <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
       <div className="flex items-center justify-between space-y-2">
         <h2 className="text-3xl font-bold tracking-tight">
-          Cálculo de Comisiones: {formatTitle(corte)} - {formatTitle(zona)}
+          Cálculo de Comisiones: {formatTitle(corte)} - {formatTitle(zona)} - {formatTitle(mes)}
         </h2>
       </div>
 
@@ -65,7 +65,7 @@ export default function CommissionCalculationPage({ params }: { params: { corte:
             <CardHeader>
                 <CardTitle>Página en Construcción</CardTitle>
                 <CardDescription>
-                    La funcionalidad para {formatTitle(corte)} y {formatTitle(zona)} aún no está implementada.
+                    La funcionalidad para {formatTitle(corte)}, {formatTitle(zona)} y {formatTitle(mes)} aún no está implementada.
                 </CardDescription>
             </CardHeader>
             <CardContent>

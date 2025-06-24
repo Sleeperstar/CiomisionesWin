@@ -19,14 +19,30 @@ const zonas = [
   { value: "provincia", label: "Provincia" },
 ];
 
+const meses = [
+    { value: "enero", label: "Enero" },
+    { value: "febrero", label: "Febrero" },
+    { value: "marzo", label: "Marzo" },
+    { value: "abril", label: "Abril" },
+    { value: "mayo", label: "Mayo" },
+    { value: "junio", label: "Junio" },
+    { value: "julio", label: "Julio" },
+    { value: "agosto", label: "Agosto" },
+    { value: "septiembre", label: "Septiembre" },
+    { value: "octubre", label: "Octubre" },
+    { value: "noviembre", label: "Noviembre" },
+    { value: "diciembre", label: "Diciembre" },
+];
+
 export default function SelectCommissionScopePage() {
   const router = useRouter();
   const [corte, setCorte] = useState<string>("");
   const [zona, setZona] = useState<string>("");
+  const [mes, setMes] = useState<string>("");
 
   const handleContinue = () => {
-    if (corte && zona) {
-      router.push(`/commissions/${corte}/${zona}`);
+    if (corte && zona && mes) {
+      router.push(`/commissions/${corte}/${zona}/${mes}`);
     }
   };
 
@@ -36,7 +52,7 @@ export default function SelectCommissionScopePage() {
         <CardHeader>
           <CardTitle>Seleccionar Escenario</CardTitle>
           <CardDescription>
-            Elige el corte y la zona para el cálculo de comisiones.
+            Elige el corte, la zona y el mes para el cálculo de comisiones.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -73,7 +89,23 @@ export default function SelectCommissionScopePage() {
               </Select>
             </div>
 
-            <Button onClick={handleContinue} disabled={!corte || !zona} className="w-full">
+            <div className="space-y-2">
+                <Label htmlFor="mes-select">Mes</Label>
+                <Select onValueChange={setMes} value={mes}>
+                    <SelectTrigger id="mes-select">
+                        <SelectValue placeholder="Seleccione un mes..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {meses.map((m) => (
+                            <SelectItem key={m.value} value={m.value}>
+                                {m.label}
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+            </div>
+
+            <Button onClick={handleContinue} disabled={!corte || !zona || !mes} className="w-full">
               Continuar
             </Button>
           </div>
