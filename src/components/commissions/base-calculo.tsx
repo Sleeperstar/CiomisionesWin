@@ -25,6 +25,7 @@ const monthMap: { [key: string]: number } = {
 
 export default function BaseCalculo({ corte, zona, mes }: { corte: string; zona: string; mes: string }) {
     const [records, setRecords] = useState<SalesRecord[]>([]);
+    const [totalCount, setTotalCount] = useState(0);
     const [loading, setLoading] = useState(true);
     const { toast } = useToast();
 
@@ -54,23 +55,25 @@ export default function BaseCalculo({ corte, zona, mes }: { corte: string; zona:
 
             let query = supabase
                 .from('SalesRecord')
-                .select('*')
+                .select('*', { count: 'exact' })
                 .not('FECHA_VALIDACION', 'is', null)
                 .gte('FECHA_INSTALADO', startDate)
-                .lt('FECHA_INSTALADO', endDate); // Use .lt (less than) instead of .lte
+                .lt('FECHA_INSTALADO', endDate);
 
             if (zona === 'lima') {
                 query = query.eq('CANAL', 'Agencias');
             }
             
-            const { data, error } = await query;
+            const { data, error, count } = await query;
 
             if (error) {
                 console.error(`Error fetching SalesRecord:`, error);
                 toast({ title: "Error", description: `No se pudieron cargar los registros de ventas: ${error.message}`, variant: "destructive" });
                 setRecords([]);
+                setTotalCount(0);
             } else {
                 setRecords(data || []);
+                setTotalCount(count || 0);
             }
             
             setLoading(false);
@@ -89,7 +92,7 @@ export default function BaseCalculo({ corte, zona, mes }: { corte: string; zona:
             <CardHeader>
                 <CardTitle>Base de Cálculo Filtrada</CardTitle>
                 <CardDescription>
-                    Registros encontrados: {records.length}
+                    Registros encontrados: {totalCount} (mostrando hasta 1000)
                 </CardDescription>
             </CardHeader>
             <CardContent>
