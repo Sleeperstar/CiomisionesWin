@@ -64,6 +64,9 @@ export default function BaseCalculo({ corte, zona, mes }: { corte: string; zona:
                 query = query.eq('CANAL', 'Agencias');
             }
             
+            // Override the default 1000-row limit to fetch all records needed for calculation.
+            query = query.limit(15000);
+
             const { data, error, count } = await query;
 
             if (error) {
@@ -92,7 +95,7 @@ export default function BaseCalculo({ corte, zona, mes }: { corte: string; zona:
             <CardHeader>
                 <CardTitle>Base de Cálculo Filtrada</CardTitle>
                 <CardDescription>
-                    Registros encontrados: {totalCount} (mostrando hasta 1000)
+                    Registros encontrados: {totalCount}
                 </CardDescription>
             </CardHeader>
             <CardContent>
