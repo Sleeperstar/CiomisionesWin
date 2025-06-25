@@ -19,8 +19,8 @@ const formatDate = (dateString: string | undefined | null): string => {
 };
 
 const monthMap: { [key: string]: number } = {
-    enero: 0, febrero: 1, marzo: 2, abril: 3, mayo: 4, junio: 5,
-    julio: 6, agosto: 7, septiembre: 8, octubre: 9, noviembre: 10, diciembre: 11
+    enero: 1, febrero: 2, marzo: 3, abril: 4, mayo: 5, junio: 6,
+    julio: 7, agosto: 8, septiembre: 9, octubre: 10, noviembre: 11, diciembre: 12
 };
 
 export default function BaseCalculo({ corte, zona, mes }: { corte: string; zona: string; mes: string }) {
@@ -32,47 +32,47 @@ export default function BaseCalculo({ corte, zona, mes }: { corte: string; zona:
         const fetchAndFilterData = async () => {
             setLoading(true);
 
-            // 1. Fetch all necessary data
-            let query = supabase.from('SalesRecord').select('*');
+            const monthNumber = monthMap[mes];
+            if (!monthNumber) {
+                toast({ title: "Error", description: "Mes inválido seleccionado.", variant: "destructive" });
+                setLoading(false);
+                return;
+            }
 
-            // 2. Filter by FECHA_VALIDACION != NULL
-            query = query.not('FECHA_VALIDACION', 'is', null);
+            // Determine the year dynamically. For simplicity, we can assume the current year or make it configurable.
+            // Let's assume the data is for 2025 as in your Excel example for consistency.
+            const year = 2025; 
 
-            // Execute the initial query
+            const startDate = `${year}-${String(monthNumber).padStart(2, '0')}-01`;
+            
+            // new Date's month parameter is 0-indexed. By passing the 1-indexed monthNumber,
+            // we correctly get the first day of the *next* month.
+            // e.g., for April (month 4), new Date(2025, 4, 1) is May 1st.
+            // For December (month 12), new Date(2025, 12, 1) correctly becomes January 1st, 2026.
+            const nextMonthDate = new Date(year, monthNumber, 1);
+            const endDate = nextMonthDate.toISOString().split('T')[0];
+
+            let query = supabase
+                .from('SalesRecord')
+                .select('*')
+                .not('FECHA_VALIDACION', 'is', null)
+                .gte('FECHA_INSTALADO', startDate)
+                .lt('FECHA_INSTALADO', endDate); // Use .lt (less than) instead of .lte
+
+            if (zona === 'lima') {
+                query = query.eq('CANAL', 'Agencias');
+            }
+            
             const { data, error } = await query;
 
             if (error) {
                 console.error(`Error fetching SalesRecord:`, error);
                 toast({ title: "Error", description: `No se pudieron cargar los registros de ventas: ${error.message}`, variant: "destructive" });
                 setRecords([]);
-                setLoading(false);
-                return;
-            }
-
-            // 3. Apply client-side filtering
-            let filteredData = data;
-
-            // Filter by Zona ('lima' -> CANAL == 'Agencias')
-            if (zona === 'lima') {
-                filteredData = filteredData.filter(record => record.CANAL === 'Agencias');
+            } else {
+                setRecords(data || []);
             }
             
-            // Filter by Mes (FECHA_INSTALADO)
-            const monthIndex = monthMap[mes];
-            if (monthIndex !== undefined) {
-                const currentYear = new Date().getFullYear();
-                filteredData = filteredData.filter(record => {
-                    if (!record.FECHA_INSTALADO) return false;
-                    try {
-                        const installedDate = new Date(record.FECHA_INSTALADO);
-                        return installedDate.getMonth() === monthIndex && installedDate.getFullYear() === currentYear;
-                    } catch (e) {
-                        return false;
-                    }
-                });
-            }
-
-            setRecords(filteredData);
             setLoading(false);
         };
 
