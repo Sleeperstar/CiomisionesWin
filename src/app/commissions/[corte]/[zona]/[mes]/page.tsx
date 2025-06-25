@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Icons } from "@/components/icons";
 import UploadParameters from "@/components/commissions/upload-parameters";
 import TableAnalysis from "@/components/commissions/table-analysis";
+import BaseCalculo from "@/components/commissions/base-calculo";
 
 // Helper to format the title from slug
 function formatTitle(slug: string) {
@@ -20,6 +21,7 @@ export default function CommissionCalculationPage({ params }: { params: { corte:
 
   // As per your request, only "Corte 1" and "Lima" are currently implemented.
   const isImplemented = corte === 'corte-1' && zona === 'lima';
+  const tabTitle = `Base ${formatTitle(corte)} - ${formatTitle(zona)} - ${formatTitle(mes)}`;
 
   return (
     <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
@@ -30,8 +32,12 @@ export default function CommissionCalculationPage({ params }: { params: { corte:
       </div>
 
       {isImplemented ? (
-        <Tabs defaultValue="upload_parameters" className="space-y-4">
+        <Tabs defaultValue="base_calculo" className="space-y-4">
           <TabsList>
+            <TabsTrigger value="base_calculo">
+                <Icons.Analytics className="mr-2 h-4 w-4" />
+                {tabTitle}
+            </TabsTrigger>
             <TabsTrigger value="upload_parameters">
               <Icons.Settings className="mr-2 h-4 w-4" />
               Subir Parámetros
@@ -41,6 +47,10 @@ export default function CommissionCalculationPage({ params }: { params: { corte:
               Análisis de Tablas
             </TabsTrigger>
           </TabsList>
+
+          <TabsContent value="base_calculo">
+            <BaseCalculo corte={corte} zona={zona} mes={mes} />
+          </TabsContent>
 
           <TabsContent value="upload_parameters">
             <Card>
