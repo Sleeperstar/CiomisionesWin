@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { ArrowUpDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/lib/supabase';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { Icons } from "@/components/icons";
@@ -44,6 +44,7 @@ export default function ResultadoComision({ corte, zona, mes }: { corte: string;
     const [loading, setLoading] = useState(true);
     const { toast } = useToast();
     const [sortConfig, setSortConfig] = useState<{ key: keyof AggregatedResult; direction: 'ascending' | 'descending' } | null>(null);
+    const [totals, setTotals] = useState<{ totalAltas: number; avgPrecio: number } | null>(null);
 
     const sortedData = useMemo(() => {
         let sortableItems = [...aggregatedData];
@@ -160,7 +161,13 @@ export default function ResultadoComision({ corte, zona, mes }: { corte: string;
                     };
                 });
 
-                setAggregatedData(finalResult);
+                                setAggregatedData(finalResult);
+
+                const totalAltas = finalResult.reduce((sum, row) => sum + row.ALTAS, 0);
+                const allPreciosSinIgv = Object.values(groupedData).flatMap(g => g.preciosSinIgv);
+                const totalSumPrecios = allPreciosSinIgv.reduce((sum, p) => sum + p, 0);
+                const avgPrecio = allPreciosSinIgv.length > 0 ? totalSumPrecios / allPreciosSinIgv.length : 0;
+                setTotals({ totalAltas, avgPrecio });
 
             } catch (error: any) {
                 console.error(`Error fetching paginated SalesRecord:`, error);
@@ -197,7 +204,12 @@ export default function ResultadoComision({ corte, zona, mes }: { corte: string;
                                         <ArrowUpDown className="ml-2 h-4 w-4" />
                                     </Button>
                                 </TableHead>
-                                <TableHead>AGENCIA</TableHead>
+                                <TableHead>
+                                    <Button variant="ghost" onClick={() => requestSort('AGENCIA')}>
+                                        AGENCIA
+                                        <ArrowUpDown className="ml-2 h-4 w-4" />
+                                    </Button>
+                                </TableHead>
                                 <TableHead>
                                     <Button variant="ghost" onClick={() => requestSort('ALTAS')}>
                                         ALTAS
@@ -222,6 +234,13 @@ export default function ResultadoComision({ corte, zona, mes }: { corte: string;
                                 </TableRow>
                             ))}
                         </TableBody>
+                        <TableFooter>
+                            <TableRow>
+                                <TableCell colSpan={2} className="font-bold text-right">TOTALES</TableCell>
+                                <TableCell className="font-bold">{totals?.totalAltas}</TableCell>
+                                <TableCell className="font-bold">{totals?.avgPrecio.toFixed(2)}</TableCell>
+                            </TableRow>
+                        </TableFooter>
                     </Table>
                     <ScrollBar orientation="horizontal" />
                 </ScrollArea>
