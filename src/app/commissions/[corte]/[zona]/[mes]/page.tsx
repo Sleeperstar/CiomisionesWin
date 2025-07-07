@@ -6,6 +6,7 @@ import { Icons } from "@/components/icons";
 import UploadParameters from "@/components/commissions/upload-parameters";
 import TableAnalysis from "@/components/commissions/table-analysis";
 import BaseCalculo from "@/components/commissions/base-calculo";
+import ResultadoComision from "@/components/commissions/resultado-comision";
 
 // Helper to format the title from slug
 function formatTitle(slug: string) {
@@ -46,6 +47,10 @@ export default function CommissionCalculationPage({ params }: { params: { corte:
               <Icons.Analytics className="mr-2 h-4 w-4" />
               Análisis de Tablas
             </TabsTrigger>
+                        <TabsTrigger value="resultado_comision">
+              <Icons.Analytics className="mr-2 h-4 w-4" />
+              Resultado de Comisiones
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="base_calculo">
@@ -68,6 +73,10 @@ export default function CommissionCalculationPage({ params }: { params: { corte:
 
           <TabsContent value="table_analysis">
               <TableAnalysis />
+          </TabsContent>
+
+          <TabsContent value="resultado_comision">
+            <ResultadoComision corte={corte} zona={zona} mes={mes} />
           </TabsContent>
         </Tabs>
       ) : (
