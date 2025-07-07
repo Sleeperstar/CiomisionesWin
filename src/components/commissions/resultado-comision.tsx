@@ -60,7 +60,7 @@ export default function ResultadoComision({ corte, zona, mes }: { corte: string;
 
             let query = supabase
                 .from('SalesRecord')
-                .select('DNI_ASESOR, ASESOR, COD_PEDIDO, PRECIO_CON_IGV_EXTERNO') // Select only necessary columns
+                .select('DNI_ASESOR, ASESOR, COD_PEDIDO, PRECIO_CON_IGV_EXTERNO, CANAL, FECHA_VALIDACION, FECHA_INSTALADO') // Select all columns needed for filtering and calculation
                 .not('FECHA_VALIDACION', 'is', null)
                 .gte('FECHA_INSTALADO', startDate)
                 .lt('FECHA_INSTALADO', endDate);
