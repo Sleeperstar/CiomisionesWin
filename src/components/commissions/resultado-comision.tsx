@@ -1,6 +1,8 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { ArrowUpDown } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { supabase } from '@/lib/supabase';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -41,6 +43,36 @@ export default function ResultadoComision({ corte, zona, mes }: { corte: string;
     const [aggregatedData, setAggregatedData] = useState<AggregatedResult[]>([]);
     const [loading, setLoading] = useState(true);
     const { toast } = useToast();
+    const [sortConfig, setSortConfig] = useState<{ key: keyof AggregatedResult; direction: 'ascending' | 'descending' } | null>(null);
+
+    const sortedData = useMemo(() => {
+        let sortableItems = [...aggregatedData];
+        if (sortConfig !== null) {
+            sortableItems.sort((a, b) => {
+                const aValue = a[sortConfig.key];
+                const bValue = b[sortConfig.key];
+
+                if (aValue === null || bValue === null) return 0;
+
+                if (aValue < bValue) {
+                    return sortConfig.direction === 'ascending' ? -1 : 1;
+                }
+                if (aValue > bValue) {
+                    return sortConfig.direction === 'ascending' ? 1 : -1;
+                }
+                return 0;
+            });
+        }
+        return sortableItems;
+    }, [aggregatedData, sortConfig]);
+
+    const requestSort = (key: keyof AggregatedResult) => {
+        let direction: 'ascending' | 'descending' = 'ascending';
+        if (sortConfig && sortConfig.key === key && sortConfig.direction === 'ascending') {
+            direction = 'descending';
+        }
+        setSortConfig({ key, direction });
+    };
 
     useEffect(() => {
         const fetchAndProcessData = async () => {
@@ -159,14 +191,29 @@ export default function ResultadoComision({ corte, zona, mes }: { corte: string;
                     <Table>
                         <TableHeader>
                             <TableRow>
-                                <TableHead>RUC</TableHead>
+                                <TableHead>
+                                    <Button variant="ghost" onClick={() => requestSort('RUC')}>
+                                        RUC
+                                        <ArrowUpDown className="ml-2 h-4 w-4" />
+                                    </Button>
+                                </TableHead>
                                 <TableHead>AGENCIA</TableHead>
-                                <TableHead>ALTAS</TableHead>
-                                <TableHead>PRECIO SIN IGV (Promedio)</TableHead>
+                                <TableHead>
+                                    <Button variant="ghost" onClick={() => requestSort('ALTAS')}>
+                                        ALTAS
+                                        <ArrowUpDown className="ml-2 h-4 w-4" />
+                                    </Button>
+                                </TableHead>
+                                <TableHead>
+                                    <Button variant="ghost" onClick={() => requestSort('PRECIO_SIN_IGV')}>
+                                        PRECIO SIN IGV (Promedio)
+                                        <ArrowUpDown className="ml-2 h-4 w-4" />
+                                    </Button>
+                                </TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {aggregatedData.map((row, index) => (
+                            {sortedData.map((row, index) => (
                                 <TableRow key={index}>
                                     <TableCell>{row.RUC}</TableCell>
                                     <TableCell>{row.AGENCIA}</TableCell>
