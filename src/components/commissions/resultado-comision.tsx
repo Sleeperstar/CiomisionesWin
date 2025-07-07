@@ -26,14 +26,14 @@ interface AggregatedResult {
 interface PartialSalesRecord {
     DNI_ASESOR: string | null;
     ASESOR: string | null;
-    COD_PEDIDO: string | null;
+    COD_PEDIDO: number | null; // Corrected type from string to number
     PRECIO_CON_IGV_EXTERNO: number | null;
 }
 
 interface GroupedResult {
     RUC: string | null;
     AGENCIA: string | null;
-    pedidos: (string | null)[];
+    pedidos: (number | null)[]; // Corrected type for the pedidos array
     preciosSinIgv: number[];
 }
 
@@ -69,16 +69,35 @@ export default function ResultadoComision({ corte, zona, mes }: { corte: string;
                 query = query.eq('CANAL', 'Agencias');
             }
             
-            query = query.limit(15000);
+            const fetchAllPaginatedData = async () => {
+                let allRecords: (Partial<SalesRecord>)[] = [];
+                let page = 0;
+                const pageSize = 1000;
+                let totalCount = 0;
 
-            const { data: records, error, count } = await query;
+                while (true) {
+                    const from = page * pageSize;
+                    const to = from + pageSize - 1;
 
-            console.log(`[Resultado Comision] Fetched ${records?.length} records. Total count from DB: ${count}`);
+                    const { data, error, count } = await query.range(from, to);
 
-            if (error) {
-                console.error(`Error fetching SalesRecord:`, error);
-                toast({ title: "Error", description: `No se pudieron cargar los registros: ${error.message}`, variant: "destructive" });
-            } else if (records) {
+                    if (error) throw error;
+                    if (data) allRecords = allRecords.concat(data);
+                    if (page === 0 && count) totalCount = count;
+
+                    if (!data || data.length < pageSize || (totalCount > 0 && allRecords.length >= totalCount)) {
+                        break;
+                    }
+                    
+                    page++;
+                }
+                return { data: allRecords, count: totalCount };
+            };
+
+            try {
+                const { data: records, count } = await fetchAllPaginatedData();
+                console.log(`[Resultado Comision] Successfully fetched all ${records.length} of ${count} records.`);
+
                 // Pivot table logic with explicit types
                 const groupedData = (records as PartialSalesRecord[]).reduce((acc: { [key: string]: GroupedResult }, record) => {
                     const key = `${record.DNI_ASESOR}-${record.ASESOR}`;
@@ -110,6 +129,10 @@ export default function ResultadoComision({ corte, zona, mes }: { corte: string;
                 });
 
                 setAggregatedData(finalResult);
+
+            } catch (error: any) {
+                console.error(`Error fetching paginated SalesRecord:`, error);
+                toast({ title: "Error", description: `No se pudieron cargar los registros: ${error.message}`, variant: "destructive" });
             }
             
             setLoading(false);
