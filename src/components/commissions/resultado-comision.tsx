@@ -60,7 +60,7 @@ export default function ResultadoComision({ corte, zona, mes }: { corte: string;
 
             let query = supabase
                 .from('SalesRecord')
-                .select('DNI_ASESOR, ASESOR, COD_PEDIDO, PRECIO_CON_IGV_EXTERNO, CANAL, FECHA_VALIDACION, FECHA_INSTALADO') // Select all columns needed for filtering and calculation
+                .select('*', { count: 'exact' }) // Match base-calculo to fetch all data
                 .not('FECHA_VALIDACION', 'is', null)
                 .gte('FECHA_INSTALADO', startDate)
                 .lt('FECHA_INSTALADO', endDate);
@@ -71,7 +71,9 @@ export default function ResultadoComision({ corte, zona, mes }: { corte: string;
             
             query = query.limit(15000);
 
-            const { data: records, error } = await query;
+            const { data: records, error, count } = await query;
+
+            console.log(`[Resultado Comision] Fetched ${records?.length} records. Total count from DB: ${count}`);
 
             if (error) {
                 console.error(`Error fetching SalesRecord:`, error);
