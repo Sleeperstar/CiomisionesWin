@@ -21,7 +21,7 @@ interface AggregatedResult {
     RUC: string | null;
     AGENCIA: string | null;
     META: number;
-    GRUPO: string | null;
+    TOP: string | null;
     ALTAS: number;
     PRECIO_SIN_IGV: number;
 }
@@ -111,7 +111,7 @@ export default function ResultadoComision({ corte, zona, mes }: { corte: string;
             const fetchParamsData = async () => {
                 const { data, error } = await supabase
                     .from('Parametros')
-                    .select('RUC, META, GRUPO')
+                    .select('RUC, META, TOP')
                     .eq('ZONA', zona.toUpperCase())
                     .eq('PERIODO', periodo);
 
@@ -156,7 +156,7 @@ export default function ResultadoComision({ corte, zona, mes }: { corte: string;
                 console.log(`[Resultado Comision] Successfully fetched ${paramsData.length} parameter records.`);
 
                 // Create a map for quick lookup of parameters by RUC
-                const paramsMap = new Map(paramsData.map(p => [p.RUC, { META: p.META, GRUPO: p.GRUPO }]));
+                const paramsMap = new Map(paramsData.map(p => [p.RUC, { META: p.META, TOP: p.TOP }]));
 
                 // Pivot table logic with explicit types
                 const groupedData = (records as PartialSalesRecord[]).reduce((acc: { [key: string]: GroupedResult }, record) => {
@@ -177,7 +177,7 @@ export default function ResultadoComision({ corte, zona, mes }: { corte: string;
                 }, {});
 
                                 const finalResult: AggregatedResult[] = Object.values(groupedData).map((group: GroupedResult) => {
-                    const params = paramsMap.get(group.RUC) || { META: 0, GRUPO: 'N/A' };
+                    const params = paramsMap.get(group.RUC) || { META: 0, TOP: 'N/A' };
                     const totalPrecios = group.preciosSinIgv.reduce((sum, p) => sum + p, 0);
                     const avgPrecio = group.preciosSinIgv.length > 0 ? totalPrecios / group.preciosSinIgv.length : 0;
                     
@@ -185,7 +185,7 @@ export default function ResultadoComision({ corte, zona, mes }: { corte: string;
                         RUC: group.RUC,
                         AGENCIA: group.AGENCIA,
                         META: params.META,
-                        GRUPO: params.GRUPO,
+                        TOP: params.TOP,
                         ALTAS: group.pedidos.length,
                         PRECIO_SIN_IGV: avgPrecio
                     };
@@ -247,9 +247,9 @@ export default function ResultadoComision({ corte, zona, mes }: { corte: string;
                                         <ArrowUpDown className="ml-2 h-4 w-4" />
                                     </Button>
                                 </TableHead>
-                                <TableHead>
-                                     <Button variant="ghost" onClick={() => requestSort('GRUPO')}>
-                                        GRUPO
+                                                                <TableHead>
+                                     <Button variant="ghost" onClick={() => requestSort('TOP')}>
+                                        TOP
                                         <ArrowUpDown className="ml-2 h-4 w-4" />
                                     </Button>
                                 </TableHead>
@@ -273,7 +273,7 @@ export default function ResultadoComision({ corte, zona, mes }: { corte: string;
                                     <TableCell>{row.RUC}</TableCell>
                                                                          <TableCell>{row.AGENCIA}</TableCell>
                                      <TableCell>{row.META}</TableCell>
-                                     <TableCell>{row.GRUPO}</TableCell>
+                                                                          <TableCell>{row.TOP}</TableCell>
                                     <TableCell>{row.ALTAS}</TableCell>
                                     <TableCell>{row.PRECIO_SIN_IGV.toFixed(2)}</TableCell>
                                 </TableRow>
@@ -283,7 +283,7 @@ export default function ResultadoComision({ corte, zona, mes }: { corte: string;
                             <TableRow>
                                 <TableCell colSpan={2} className="font-bold text-right">TOTALES</TableCell>
                                 <TableCell className="font-bold">{totals?.totalMeta}</TableCell>
-                                <TableCell></TableCell> {/* Empty cell for GRUPO */}
+                                                                <TableCell></TableCell> {/* Empty cell for TOP */}
                                 <TableCell className="font-bold">{totals?.totalAltas}</TableCell>
                                 <TableCell className="font-bold">{totals?.avgPrecio.toFixed(2)}</TableCell>
                             </TableRow>
