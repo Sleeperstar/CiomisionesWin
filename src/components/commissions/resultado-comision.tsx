@@ -20,6 +20,8 @@ const monthMap: { [key: string]: number } = {
 interface AggregatedResult {
     RUC: string | null;
     AGENCIA: string | null;
+    META: number;
+    GRUPO: string | null;
     ALTAS: number;
     PRECIO_SIN_IGV: number;
 }
@@ -44,7 +46,7 @@ export default function ResultadoComision({ corte, zona, mes }: { corte: string;
     const [loading, setLoading] = useState(true);
     const { toast } = useToast();
     const [sortConfig, setSortConfig] = useState<{ key: keyof AggregatedResult; direction: 'ascending' | 'descending' } | null>(null);
-    const [totals, setTotals] = useState<{ totalAltas: number; avgPrecio: number } | null>(null);
+    const [totals, setTotals] = useState<{ totalAltas: number; totalMeta: number; avgPrecio: number } | null>(null);
 
     const sortedData = useMemo(() => {
         let sortableItems = [...aggregatedData];
@@ -77,6 +79,8 @@ export default function ResultadoComision({ corte, zona, mes }: { corte: string;
 
     useEffect(() => {
         const fetchAndProcessData = async () => {
+            setAggregatedData([]);
+            setTotals(null);
             setLoading(true);
 
             const monthNumber = monthMap[mes];
@@ -90,6 +94,7 @@ export default function ResultadoComision({ corte, zona, mes }: { corte: string;
             const startDate = `${year}-${String(monthNumber).padStart(2, '0')}-01`;
             const nextMonthDate = new Date(year, monthNumber, 1);
             const endDate = nextMonthDate.toISOString().split('T')[0];
+            const periodo = `${year}${String(monthNumber).padStart(2, '0')}`;
 
             let query = supabase
                 .from('SalesRecord')
@@ -102,6 +107,18 @@ export default function ResultadoComision({ corte, zona, mes }: { corte: string;
                 query = query.eq('CANAL', 'Agencias');
             }
             
+                        // Fetch parameters data
+            const fetchParamsData = async () => {
+                const { data, error } = await supabase
+                    .from('Parametros')
+                    .select('RUC, META, GRUPO')
+                    .eq('ZONA', zona.toUpperCase())
+                    .eq('PERIODO', periodo);
+
+                if (error) throw new Error(`Error fetching parameters: ${error.message}`);
+                return data || [];
+            };
+
             const fetchAllPaginatedData = async () => {
                 let allRecords: (Partial<SalesRecord>)[] = [];
                 let page = 0;
@@ -127,9 +144,19 @@ export default function ResultadoComision({ corte, zona, mes }: { corte: string;
                 return { data: allRecords, count: totalCount };
             };
 
-            try {
-                const { data: records, count } = await fetchAllPaginatedData();
-                console.log(`[Resultado Comision] Successfully fetched all ${records.length} of ${count} records.`);
+                        try {
+                // Fetch both datasets in parallel
+                const [salesData, paramsData] = await Promise.all([
+                    fetchAllPaginatedData(),
+                    fetchParamsData(),
+                ]);
+
+                const { data: records, count } = salesData;
+                console.log(`[Resultado Comision] Successfully fetched all ${records.length} of ${count} sales records.`);
+                console.log(`[Resultado Comision] Successfully fetched ${paramsData.length} parameter records.`);
+
+                // Create a map for quick lookup of parameters by RUC
+                const paramsMap = new Map(paramsData.map(p => [p.RUC, { META: p.META, GRUPO: p.GRUPO }]));
 
                 // Pivot table logic with explicit types
                 const groupedData = (records as PartialSalesRecord[]).reduce((acc: { [key: string]: GroupedResult }, record) => {
@@ -149,13 +176,16 @@ export default function ResultadoComision({ corte, zona, mes }: { corte: string;
                     return acc;
                 }, {});
 
-                const finalResult: AggregatedResult[] = Object.values(groupedData).map((group: GroupedResult) => {
+                                const finalResult: AggregatedResult[] = Object.values(groupedData).map((group: GroupedResult) => {
+                    const params = paramsMap.get(group.RUC) || { META: 0, GRUPO: 'N/A' };
                     const totalPrecios = group.preciosSinIgv.reduce((sum, p) => sum + p, 0);
                     const avgPrecio = group.preciosSinIgv.length > 0 ? totalPrecios / group.preciosSinIgv.length : 0;
                     
-                    return {
+                                        return {
                         RUC: group.RUC,
                         AGENCIA: group.AGENCIA,
+                        META: params.META,
+                        GRUPO: params.GRUPO,
                         ALTAS: group.pedidos.length,
                         PRECIO_SIN_IGV: avgPrecio
                     };
@@ -163,11 +193,12 @@ export default function ResultadoComision({ corte, zona, mes }: { corte: string;
 
                                 setAggregatedData(finalResult);
 
-                const totalAltas = finalResult.reduce((sum, row) => sum + row.ALTAS, 0);
+                                const totalAltas = finalResult.reduce((sum, row) => sum + row.ALTAS, 0);
+                const totalMeta = finalResult.reduce((sum, row) => sum + row.META, 0);
                 const allPreciosSinIgv = Object.values(groupedData).flatMap(g => g.preciosSinIgv);
                 const totalSumPrecios = allPreciosSinIgv.reduce((sum, p) => sum + p, 0);
                 const avgPrecio = allPreciosSinIgv.length > 0 ? totalSumPrecios / allPreciosSinIgv.length : 0;
-                setTotals({ totalAltas, avgPrecio });
+                setTotals({ totalAltas, totalMeta, avgPrecio });
 
             } catch (error: any) {
                 console.error(`Error fetching paginated SalesRecord:`, error);
@@ -204,9 +235,21 @@ export default function ResultadoComision({ corte, zona, mes }: { corte: string;
                                         <ArrowUpDown className="ml-2 h-4 w-4" />
                                     </Button>
                                 </TableHead>
-                                <TableHead>
+                                                                <TableHead>
                                     <Button variant="ghost" onClick={() => requestSort('AGENCIA')}>
                                         AGENCIA
+                                        <ArrowUpDown className="ml-2 h-4 w-4" />
+                                    </Button>
+                                </TableHead>
+                                <TableHead>
+                                     <Button variant="ghost" onClick={() => requestSort('META')}>
+                                        META
+                                        <ArrowUpDown className="ml-2 h-4 w-4" />
+                                    </Button>
+                                </TableHead>
+                                <TableHead>
+                                     <Button variant="ghost" onClick={() => requestSort('GRUPO')}>
+                                        GRUPO
                                         <ArrowUpDown className="ml-2 h-4 w-4" />
                                     </Button>
                                 </TableHead>
@@ -228,15 +271,19 @@ export default function ResultadoComision({ corte, zona, mes }: { corte: string;
                             {sortedData.map((row, index) => (
                                 <TableRow key={index}>
                                     <TableCell>{row.RUC}</TableCell>
-                                    <TableCell>{row.AGENCIA}</TableCell>
+                                                                         <TableCell>{row.AGENCIA}</TableCell>
+                                     <TableCell>{row.META}</TableCell>
+                                     <TableCell>{row.GRUPO}</TableCell>
                                     <TableCell>{row.ALTAS}</TableCell>
                                     <TableCell>{row.PRECIO_SIN_IGV.toFixed(2)}</TableCell>
                                 </TableRow>
                             ))}
                         </TableBody>
-                        <TableFooter>
+                                                <TableFooter>
                             <TableRow>
                                 <TableCell colSpan={2} className="font-bold text-right">TOTALES</TableCell>
+                                <TableCell className="font-bold">{totals?.totalMeta}</TableCell>
+                                <TableCell></TableCell> {/* Empty cell for GRUPO */}
                                 <TableCell className="font-bold">{totals?.totalAltas}</TableCell>
                                 <TableCell className="font-bold">{totals?.avgPrecio.toFixed(2)}</TableCell>
                             </TableRow>
