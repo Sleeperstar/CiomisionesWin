@@ -8,6 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Icons } from "@/components/icons";
 import { SalesRecord } from '@/lib/schemas';
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
+import { Badge } from "@/components/ui/badge";
 
 const formatDate = (dateString: string | undefined | null): string => {
     if (!dateString) return '';
@@ -23,6 +24,9 @@ const monthMap: { [key: string]: number } = {
     julio: 7, agosto: 8, septiembre: 9, octubre: 10, noviembre: 11, diciembre: 12
 };
 
+// Límite de muestra para mostrar en la tabla (evita timeouts)
+const SAMPLE_LIMIT = 100;
+
 export default function BaseCalculo({ corte, zona, mes }: { corte: string; zona: string; mes: string }) {
     const [records, setRecords] = useState<SalesRecord[]>([]);
     const [totalCount, setTotalCount] = useState(0);
@@ -32,6 +36,8 @@ export default function BaseCalculo({ corte, zona, mes }: { corte: string; zona:
     useEffect(() => {
         const fetchAndFilterData = async () => {
             setLoading(true);
+            setRecords([]);
+            setTotalCount(0);
 
             const monthNumber = monthMap[mes];
             if (!monthNumber) {
@@ -40,43 +46,68 @@ export default function BaseCalculo({ corte, zona, mes }: { corte: string; zona:
                 return;
             }
 
-            // Determine the year dynamically. For simplicity, we can assume the current year or make it configurable.
-            // Let's assume the data is for 2025 as in your Excel example for consistency.
-            const year = 2025; 
-
+            const year = 2025;
             const startDate = `${year}-${String(monthNumber).padStart(2, '0')}-01`;
-            
-            // new Date's month parameter is 0-indexed. By passing the 1-indexed monthNumber,
-            // we correctly get the first day of the *next* month.
-            // e.g., for April (month 4), new Date(2025, 4, 1) is May 1st.
-            // For December (month 12), new Date(2025, 12, 1) correctly becomes January 1st, 2026.
             const nextMonthDate = new Date(year, monthNumber, 1);
             const endDate = nextMonthDate.toISOString().split('T')[0];
 
-            let query = supabase
-                .from('SalesRecord')
-                .select('*', { count: 'exact' })
-                .not('FECHA_VALIDACION', 'is', null)
-                .gte('FECHA_INSTALADO', startDate)
-                .lt('FECHA_INSTALADO', endDate);
+            // Construir los filtros base
+            const buildBaseQuery = () => {
+                let query = supabase
+                    .from('SalesRecord')
+                    .select('*', { count: 'exact', head: false })
+                    .not('FECHA_VALIDACION', 'is', null)
+                    .gte('FECHA_INSTALADO', startDate)
+                    .lt('FECHA_INSTALADO', endDate);
 
-            if (zona === 'lima') {
-                query = query.eq('CANAL', 'Agencias');
-            }
-            
-            // Override the default 1000-row limit to fetch all records needed for calculation.
-            query = query.limit(15000);
+                if (zona === 'lima') {
+                    query = query.eq('CANAL', 'Agencias');
+                }
+                return query;
+            };
 
-            const { data, error, count } = await query;
+            try {
+                // Consulta 1: Solo obtener el conteo total (rápida, sin traer datos)
+                const countQuery = supabase
+                    .from('SalesRecord')
+                    .select('*', { count: 'exact', head: true })
+                    .not('FECHA_VALIDACION', 'is', null)
+                    .gte('FECHA_INSTALADO', startDate)
+                    .lt('FECHA_INSTALADO', endDate);
 
-            if (error) {
+                if (zona === 'lima') {
+                    countQuery.eq('CANAL', 'Agencias');
+                }
+
+                // Consulta 2: Obtener solo una muestra de datos para mostrar
+                const sampleQuery = buildBaseQuery().limit(SAMPLE_LIMIT);
+
+                // Ejecutar ambas consultas en paralelo
+                const [countResult, sampleResult] = await Promise.all([
+                    countQuery,
+                    sampleQuery
+                ]);
+
+                if (countResult.error) {
+                    throw new Error(`Error al contar registros: ${countResult.error.message}`);
+                }
+
+                if (sampleResult.error) {
+                    throw new Error(`Error al obtener muestra: ${sampleResult.error.message}`);
+                }
+
+                setTotalCount(countResult.count || 0);
+                setRecords(sampleResult.data || []);
+
+            } catch (error: any) {
                 console.error(`Error fetching SalesRecord:`, error);
-                toast({ title: "Error", description: `No se pudieron cargar los registros de ventas: ${error.message}`, variant: "destructive" });
+                toast({ 
+                    title: "Error", 
+                    description: error.message || "No se pudieron cargar los registros de ventas", 
+                    variant: "destructive" 
+                });
                 setRecords([]);
                 setTotalCount(0);
-            } else {
-                setRecords(data || []);
-                setTotalCount(count || 0);
             }
             
             setLoading(false);
@@ -87,52 +118,128 @@ export default function BaseCalculo({ corte, zona, mes }: { corte: string; zona:
 
 
     if (loading) {
-        return <div className="flex justify-center items-center h-64"><Icons.Spinner className="h-8 w-8 animate-spin" /></div>;
+        return (
+            <Card className="border-0 shadow-lg bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
+                <div className="flex justify-center items-center h-64">
+                    <div className="flex flex-col items-center gap-3">
+                        <Icons.Spinner className="h-10 w-10 animate-spin text-blue-600" />
+                        <p className="text-sm text-muted-foreground animate-pulse">Cargando datos...</p>
+                    </div>
+                </div>
+            </Card>
+        );
     }
 
     return (
-        <Card>
-            <CardHeader>
-                <CardTitle>Base de Cálculo Filtrada</CardTitle>
-                <CardDescription>
-                    Registros encontrados: {totalCount}
-                </CardDescription>
+        <Card className="border-0 shadow-lg bg-gradient-to-br from-white to-slate-50 dark:from-slate-900 dark:to-slate-800">
+            <CardHeader className="pb-4 border-b bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-t-lg">
+                <div className="flex items-center justify-between">
+                    <div>
+                        <CardTitle className="text-xl font-bold tracking-tight">Base de Cálculo Filtrada</CardTitle>
+                        <CardDescription className="text-blue-100 mt-1">
+                            Vista previa de los registros que cumplen los filtros aplicados
+                        </CardDescription>
+                    </div>
+                    <div className="flex flex-col items-end gap-2">
+                        <Badge variant="secondary" className="bg-white/20 text-white border-white/30 text-lg px-4 py-2 font-bold">
+                            {totalCount.toLocaleString('es-PE')} registros
+                        </Badge>
+                        {totalCount > SAMPLE_LIMIT && (
+                            <span className="text-xs text-blue-200">
+                                Mostrando {SAMPLE_LIMIT} de {totalCount.toLocaleString('es-PE')}
+                            </span>
+                        )}
+                    </div>
+                </div>
             </CardHeader>
-            <CardContent>
-                 <ScrollArea className="whitespace-nowrap rounded-md border">
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead>COD_PEDIDO</TableHead>
-                                <TableHead>DNI_CLIENTE</TableHead>
-                                <TableHead>FECHA_VENTA</TableHead>
-                                <TableHead>FECHA_VALIDACION</TableHead>
-                                <TableHead>FECHA_INSTALADO</TableHead>
-                                <TableHead>OFERTA</TableHead>
-                                <TableHead>TIPO_VENTA</TableHead>
-                                <TableHead>ASESOR</TableHead>
-                                <TableHead>CANAL</TableHead>
-                                <TableHead>TIPO_ESTADO</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {records.map((row) => (
-                                <TableRow key={row.COD_PEDIDO}>
-                                    <TableCell>{row.COD_PEDIDO}</TableCell>
-                                    <TableCell>{row.DNI_CLIENTE}</TableCell>
-                                    <TableCell>{formatDate(row.FECHA_VENTA)}</TableCell>
-                                    <TableCell>{formatDate(row.FECHA_VALIDACION)}</TableCell>
-                                    <TableCell>{formatDate(row.FECHA_INSTALADO)}</TableCell>
-                                    <TableCell>{row.OFERTA}</TableCell>
-                                    <TableCell>{row.TIPO_VENTA}</TableCell>
-                                    <TableCell>{row.ASESOR}</TableCell>
-                                    <TableCell>{row.CANAL}</TableCell>
-                                    <TableCell>{row.TIPO_ESTADO}</TableCell>
+            <CardContent className="p-0">
+                <ScrollArea className="h-[500px] w-full">
+                    <div className="min-w-max">
+                        <Table>
+                            <TableHeader className="sticky top-0 z-10">
+                                <TableRow className="bg-slate-100 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800">
+                                    <TableHead className="font-bold text-slate-700 dark:text-slate-200 whitespace-nowrap px-4 py-3 border-b-2 border-blue-500">COD_PEDIDO</TableHead>
+                                    <TableHead className="font-bold text-slate-700 dark:text-slate-200 whitespace-nowrap px-4 py-3 border-b-2 border-blue-500">DNI_CLIENTE</TableHead>
+                                    <TableHead className="font-bold text-slate-700 dark:text-slate-200 whitespace-nowrap px-4 py-3 border-b-2 border-blue-500">FECHA_VENTA</TableHead>
+                                    <TableHead className="font-bold text-slate-700 dark:text-slate-200 whitespace-nowrap px-4 py-3 border-b-2 border-blue-500">FECHA_VALIDACION</TableHead>
+                                    <TableHead className="font-bold text-slate-700 dark:text-slate-200 whitespace-nowrap px-4 py-3 border-b-2 border-blue-500">FECHA_INSTALADO</TableHead>
+                                    <TableHead className="font-bold text-slate-700 dark:text-slate-200 whitespace-nowrap px-4 py-3 border-b-2 border-blue-500">OFERTA</TableHead>
+                                    <TableHead className="font-bold text-slate-700 dark:text-slate-200 whitespace-nowrap px-4 py-3 border-b-2 border-blue-500">TIPO_VENTA</TableHead>
+                                    <TableHead className="font-bold text-slate-700 dark:text-slate-200 whitespace-nowrap px-4 py-3 border-b-2 border-blue-500">ASESOR</TableHead>
+                                    <TableHead className="font-bold text-slate-700 dark:text-slate-200 whitespace-nowrap px-4 py-3 border-b-2 border-blue-500">CANAL</TableHead>
+                                    <TableHead className="font-bold text-slate-700 dark:text-slate-200 whitespace-nowrap px-4 py-3 border-b-2 border-blue-500">TIPO_ESTADO</TableHead>
                                 </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
+                            </TableHeader>
+                            <TableBody>
+                                {records.length === 0 ? (
+                                    <TableRow>
+                                        <TableCell colSpan={10} className="text-center py-12 text-muted-foreground">
+                                            <div className="flex flex-col items-center gap-2">
+                                                <svg className="h-12 w-12 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                                </svg>
+                                                <span>No se encontraron registros con los filtros seleccionados</span>
+                                            </div>
+                                        </TableCell>
+                                    </TableRow>
+                                ) : (
+                                    records.map((row, index) => (
+                                        <TableRow 
+                                            key={row.COD_PEDIDO} 
+                                            className={`
+                                                transition-colors duration-150
+                                                ${index % 2 === 0 ? 'bg-white dark:bg-slate-900' : 'bg-slate-50/50 dark:bg-slate-800/50'}
+                                                hover:bg-blue-50 dark:hover:bg-blue-900/20
+                                            `}
+                                        >
+                                            <TableCell className="font-mono text-sm px-4 py-3 whitespace-nowrap">{row.COD_PEDIDO}</TableCell>
+                                            <TableCell className="font-mono text-sm px-4 py-3 whitespace-nowrap">{row.DNI_CLIENTE}</TableCell>
+                                            <TableCell className="text-sm px-4 py-3 whitespace-nowrap">{formatDate(row.FECHA_VENTA)}</TableCell>
+                                            <TableCell className="text-sm px-4 py-3 whitespace-nowrap">{formatDate(row.FECHA_VALIDACION)}</TableCell>
+                                            <TableCell className="text-sm px-4 py-3 whitespace-nowrap">{formatDate(row.FECHA_INSTALADO)}</TableCell>
+                                            <TableCell className="text-sm px-4 py-3 whitespace-nowrap max-w-[200px] truncate" title={row.OFERTA || ''}>
+                                                {row.OFERTA}
+                                            </TableCell>
+                                            <TableCell className="px-4 py-3 whitespace-nowrap">
+                                                <Badge variant="outline" className="text-xs">
+                                                    {row.TIPO_VENTA}
+                                                </Badge>
+                                            </TableCell>
+                                            <TableCell className="text-sm px-4 py-3 whitespace-nowrap max-w-[180px] truncate" title={row.ASESOR || ''}>
+                                                {row.ASESOR}
+                                            </TableCell>
+                                            <TableCell className="px-4 py-3 whitespace-nowrap">
+                                                <Badge 
+                                                    variant="secondary" 
+                                                    className={`text-xs ${
+                                                        row.CANAL === 'Agencias' 
+                                                            ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300' 
+                                                            : 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300'
+                                                    }`}
+                                                >
+                                                    {row.CANAL}
+                                                </Badge>
+                                            </TableCell>
+                                            <TableCell className="px-4 py-3 whitespace-nowrap">
+                                                <Badge 
+                                                    variant="secondary"
+                                                    className={`text-xs ${
+                                                        row.TIPO_ESTADO === 'INSTALADO' 
+                                                            ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
+                                                            : 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300'
+                                                    }`}
+                                                >
+                                                    {row.TIPO_ESTADO}
+                                                </Badge>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))
+                                )}
+                            </TableBody>
+                        </Table>
+                    </div>
                     <ScrollBar orientation="horizontal" />
+                    <ScrollBar orientation="vertical" />
                 </ScrollArea>
             </CardContent>
         </Card>
