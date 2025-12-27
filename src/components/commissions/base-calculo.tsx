@@ -7,7 +7,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useToast } from "@/hooks/use-toast";
 import { Icons } from "@/components/icons";
 import { SalesRecord } from '@/lib/schemas';
-import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 
 const formatDate = (dateString: string | undefined | null): string => {
@@ -119,10 +118,10 @@ export default function BaseCalculo({ corte, zona, mes }: { corte: string; zona:
 
     if (loading) {
         return (
-            <Card className="border-0 shadow-lg bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
+            <Card className="border-0 shadow-lg bg-gradient-to-br from-orange-50 to-amber-50 dark:from-slate-900 dark:to-slate-800">
                 <div className="flex justify-center items-center h-64">
                     <div className="flex flex-col items-center gap-3">
-                        <Icons.Spinner className="h-10 w-10 animate-spin text-blue-600" />
+                        <Icons.Spinner className="h-10 w-10 animate-spin text-[#f53c00]" />
                         <p className="text-sm text-muted-foreground animate-pulse">Cargando datos...</p>
                     </div>
                 </div>
@@ -131,116 +130,112 @@ export default function BaseCalculo({ corte, zona, mes }: { corte: string; zona:
     }
 
     return (
-        <Card className="border-0 shadow-lg bg-gradient-to-br from-white to-slate-50 dark:from-slate-900 dark:to-slate-800">
-            <CardHeader className="pb-4 border-b bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-t-lg">
-                <div className="flex items-center justify-between">
+        <Card className="border-0 shadow-lg bg-gradient-to-br from-white to-orange-50/30 dark:from-slate-900 dark:to-slate-800 overflow-hidden">
+            <CardHeader className="pb-4 border-b text-white rounded-t-lg" style={{ background: 'linear-gradient(135deg, #f53c00 0%, #ff8300 50%, #ffa700 100%)' }}>
+                <div className="flex items-center justify-between flex-wrap gap-4">
                     <div>
                         <CardTitle className="text-xl font-bold tracking-tight">Base de Cálculo Filtrada</CardTitle>
-                        <CardDescription className="text-blue-100 mt-1">
+                        <CardDescription className="text-orange-100 mt-1">
                             Vista previa de los registros que cumplen los filtros aplicados
                         </CardDescription>
                     </div>
                     <div className="flex flex-col items-end gap-2">
-                        <Badge variant="secondary" className="bg-white/20 text-white border-white/30 text-lg px-4 py-2 font-bold">
+                        <Badge variant="secondary" className="bg-white/25 text-white border-white/40 text-lg px-4 py-2 font-bold shadow-sm">
                             {totalCount.toLocaleString('es-PE')} registros
                         </Badge>
                         {totalCount > SAMPLE_LIMIT && (
-                            <span className="text-xs text-blue-200">
+                            <span className="text-xs text-orange-100">
                                 Mostrando {SAMPLE_LIMIT} de {totalCount.toLocaleString('es-PE')}
                             </span>
                         )}
                     </div>
                 </div>
             </CardHeader>
-            <CardContent className="p-0">
-                <ScrollArea className="h-[500px] w-full">
-                    <div className="min-w-max">
-                        <Table>
-                            <TableHeader className="sticky top-0 z-10">
-                                <TableRow className="bg-slate-100 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800">
-                                    <TableHead className="font-bold text-slate-700 dark:text-slate-200 whitespace-nowrap px-4 py-3 border-b-2 border-blue-500">COD_PEDIDO</TableHead>
-                                    <TableHead className="font-bold text-slate-700 dark:text-slate-200 whitespace-nowrap px-4 py-3 border-b-2 border-blue-500">DNI_CLIENTE</TableHead>
-                                    <TableHead className="font-bold text-slate-700 dark:text-slate-200 whitespace-nowrap px-4 py-3 border-b-2 border-blue-500">FECHA_VENTA</TableHead>
-                                    <TableHead className="font-bold text-slate-700 dark:text-slate-200 whitespace-nowrap px-4 py-3 border-b-2 border-blue-500">FECHA_VALIDACION</TableHead>
-                                    <TableHead className="font-bold text-slate-700 dark:text-slate-200 whitespace-nowrap px-4 py-3 border-b-2 border-blue-500">FECHA_INSTALADO</TableHead>
-                                    <TableHead className="font-bold text-slate-700 dark:text-slate-200 whitespace-nowrap px-4 py-3 border-b-2 border-blue-500">OFERTA</TableHead>
-                                    <TableHead className="font-bold text-slate-700 dark:text-slate-200 whitespace-nowrap px-4 py-3 border-b-2 border-blue-500">TIPO_VENTA</TableHead>
-                                    <TableHead className="font-bold text-slate-700 dark:text-slate-200 whitespace-nowrap px-4 py-3 border-b-2 border-blue-500">ASESOR</TableHead>
-                                    <TableHead className="font-bold text-slate-700 dark:text-slate-200 whitespace-nowrap px-4 py-3 border-b-2 border-blue-500">CANAL</TableHead>
-                                    <TableHead className="font-bold text-slate-700 dark:text-slate-200 whitespace-nowrap px-4 py-3 border-b-2 border-blue-500">TIPO_ESTADO</TableHead>
+            <CardContent className="p-0 relative">
+                <div className="overflow-auto max-h-[500px] max-w-full">
+                    <Table className="relative">
+                        <TableHeader className="sticky top-0 bg-gradient-to-r from-orange-100 to-amber-100 dark:from-slate-800 dark:to-slate-700">
+                            <TableRow className="hover:bg-orange-100 dark:hover:bg-slate-800">
+                                <TableHead className="font-bold text-slate-700 dark:text-slate-200 whitespace-nowrap px-4 py-3 border-b-2 border-[#f53c00]">COD_PEDIDO</TableHead>
+                                <TableHead className="font-bold text-slate-700 dark:text-slate-200 whitespace-nowrap px-4 py-3 border-b-2 border-[#f53c00]">DNI_CLIENTE</TableHead>
+                                <TableHead className="font-bold text-slate-700 dark:text-slate-200 whitespace-nowrap px-4 py-3 border-b-2 border-[#ff8300]">FECHA_VENTA</TableHead>
+                                <TableHead className="font-bold text-slate-700 dark:text-slate-200 whitespace-nowrap px-4 py-3 border-b-2 border-[#ff8300]">FECHA_VALIDACION</TableHead>
+                                <TableHead className="font-bold text-slate-700 dark:text-slate-200 whitespace-nowrap px-4 py-3 border-b-2 border-[#ffa700]">FECHA_INSTALADO</TableHead>
+                                <TableHead className="font-bold text-slate-700 dark:text-slate-200 whitespace-nowrap px-4 py-3 border-b-2 border-[#ffa700]">OFERTA</TableHead>
+                                <TableHead className="font-bold text-slate-700 dark:text-slate-200 whitespace-nowrap px-4 py-3 border-b-2 border-[#f53c00]">TIPO_VENTA</TableHead>
+                                <TableHead className="font-bold text-slate-700 dark:text-slate-200 whitespace-nowrap px-4 py-3 border-b-2 border-[#f53c00]">ASESOR</TableHead>
+                                <TableHead className="font-bold text-slate-700 dark:text-slate-200 whitespace-nowrap px-4 py-3 border-b-2 border-[#ff8300]">CANAL</TableHead>
+                                <TableHead className="font-bold text-slate-700 dark:text-slate-200 whitespace-nowrap px-4 py-3 border-b-2 border-[#ffa700]">TIPO_ESTADO</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {records.length === 0 ? (
+                                <TableRow>
+                                    <TableCell colSpan={10} className="text-center py-12 text-muted-foreground">
+                                        <div className="flex flex-col items-center gap-2">
+                                            <svg className="h-12 w-12 text-orange-200" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                            </svg>
+                                            <span>No se encontraron registros con los filtros seleccionados</span>
+                                        </div>
+                                    </TableCell>
                                 </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {records.length === 0 ? (
-                                    <TableRow>
-                                        <TableCell colSpan={10} className="text-center py-12 text-muted-foreground">
-                                            <div className="flex flex-col items-center gap-2">
-                                                <svg className="h-12 w-12 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                                </svg>
-                                                <span>No se encontraron registros con los filtros seleccionados</span>
-                                            </div>
+                            ) : (
+                                records.map((row, index) => (
+                                    <TableRow 
+                                        key={row.COD_PEDIDO} 
+                                        className={`
+                                            transition-colors duration-150
+                                            ${index % 2 === 0 ? 'bg-white dark:bg-slate-900' : 'bg-orange-50/40 dark:bg-slate-800/50'}
+                                            hover:bg-orange-100/60 dark:hover:bg-orange-900/20
+                                        `}
+                                    >
+                                        <TableCell className="font-mono text-sm px-4 py-3 whitespace-nowrap">{row.COD_PEDIDO}</TableCell>
+                                        <TableCell className="font-mono text-sm px-4 py-3 whitespace-nowrap">{row.DNI_CLIENTE}</TableCell>
+                                        <TableCell className="text-sm px-4 py-3 whitespace-nowrap">{formatDate(row.FECHA_VENTA)}</TableCell>
+                                        <TableCell className="text-sm px-4 py-3 whitespace-nowrap">{formatDate(row.FECHA_VALIDACION)}</TableCell>
+                                        <TableCell className="text-sm px-4 py-3 whitespace-nowrap">{formatDate(row.FECHA_INSTALADO)}</TableCell>
+                                        <TableCell className="text-sm px-4 py-3 whitespace-nowrap max-w-[200px] truncate" title={row.OFERTA || ''}>
+                                            {row.OFERTA}
+                                        </TableCell>
+                                        <TableCell className="px-4 py-3 whitespace-nowrap">
+                                            <Badge variant="outline" className="text-xs border-[#ff8300] text-[#f53c00]">
+                                                {row.TIPO_VENTA}
+                                            </Badge>
+                                        </TableCell>
+                                        <TableCell className="text-sm px-4 py-3 whitespace-nowrap max-w-[180px] truncate" title={row.ASESOR || ''}>
+                                            {row.ASESOR}
+                                        </TableCell>
+                                        <TableCell className="px-4 py-3 whitespace-nowrap">
+                                            <Badge 
+                                                variant="secondary" 
+                                                className={`text-xs ${
+                                                    row.CANAL === 'Agencias' 
+                                                        ? 'bg-[#ffa700]/20 text-[#f53c00] border border-[#ffa700]/40' 
+                                                        : 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300'
+                                                }`}
+                                            >
+                                                {row.CANAL}
+                                            </Badge>
+                                        </TableCell>
+                                        <TableCell className="px-4 py-3 whitespace-nowrap">
+                                            <Badge 
+                                                variant="secondary"
+                                                className={`text-xs ${
+                                                    row.TIPO_ESTADO === 'INSTALADO' 
+                                                        ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
+                                                        : 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300'
+                                                }`}
+                                            >
+                                                {row.TIPO_ESTADO}
+                                            </Badge>
                                         </TableCell>
                                     </TableRow>
-                                ) : (
-                                    records.map((row, index) => (
-                                        <TableRow 
-                                            key={row.COD_PEDIDO} 
-                                            className={`
-                                                transition-colors duration-150
-                                                ${index % 2 === 0 ? 'bg-white dark:bg-slate-900' : 'bg-slate-50/50 dark:bg-slate-800/50'}
-                                                hover:bg-blue-50 dark:hover:bg-blue-900/20
-                                            `}
-                                        >
-                                            <TableCell className="font-mono text-sm px-4 py-3 whitespace-nowrap">{row.COD_PEDIDO}</TableCell>
-                                            <TableCell className="font-mono text-sm px-4 py-3 whitespace-nowrap">{row.DNI_CLIENTE}</TableCell>
-                                            <TableCell className="text-sm px-4 py-3 whitespace-nowrap">{formatDate(row.FECHA_VENTA)}</TableCell>
-                                            <TableCell className="text-sm px-4 py-3 whitespace-nowrap">{formatDate(row.FECHA_VALIDACION)}</TableCell>
-                                            <TableCell className="text-sm px-4 py-3 whitespace-nowrap">{formatDate(row.FECHA_INSTALADO)}</TableCell>
-                                            <TableCell className="text-sm px-4 py-3 whitespace-nowrap max-w-[200px] truncate" title={row.OFERTA || ''}>
-                                                {row.OFERTA}
-                                            </TableCell>
-                                            <TableCell className="px-4 py-3 whitespace-nowrap">
-                                                <Badge variant="outline" className="text-xs">
-                                                    {row.TIPO_VENTA}
-                                                </Badge>
-                                            </TableCell>
-                                            <TableCell className="text-sm px-4 py-3 whitespace-nowrap max-w-[180px] truncate" title={row.ASESOR || ''}>
-                                                {row.ASESOR}
-                                            </TableCell>
-                                            <TableCell className="px-4 py-3 whitespace-nowrap">
-                                                <Badge 
-                                                    variant="secondary" 
-                                                    className={`text-xs ${
-                                                        row.CANAL === 'Agencias' 
-                                                            ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300' 
-                                                            : 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300'
-                                                    }`}
-                                                >
-                                                    {row.CANAL}
-                                                </Badge>
-                                            </TableCell>
-                                            <TableCell className="px-4 py-3 whitespace-nowrap">
-                                                <Badge 
-                                                    variant="secondary"
-                                                    className={`text-xs ${
-                                                        row.TIPO_ESTADO === 'INSTALADO' 
-                                                            ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
-                                                            : 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300'
-                                                    }`}
-                                                >
-                                                    {row.TIPO_ESTADO}
-                                                </Badge>
-                                            </TableCell>
-                                        </TableRow>
-                                    ))
-                                )}
-                            </TableBody>
-                        </Table>
-                    </div>
-                    <ScrollBar orientation="horizontal" />
-                    <ScrollBar orientation="vertical" />
-                </ScrollArea>
+                                ))
+                            )}
+                        </TableBody>
+                    </Table>
+                </div>
             </CardContent>
         </Card>
     );
