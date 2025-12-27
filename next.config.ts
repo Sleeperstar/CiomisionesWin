@@ -18,6 +18,23 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  // Configuración para resolver problemas de OpenTelemetry con Genkit en Vercel
+  serverExternalPackages: [
+    '@opentelemetry/sdk-node',
+    '@opentelemetry/exporter-jaeger',
+    'genkit',
+    '@genkit-ai/googleai',
+  ],
+  webpack: (config, { isServer }) => {
+    if (isServer) {
+      // Ignorar módulos opcionales de OpenTelemetry que no están instalados
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        '@opentelemetry/exporter-jaeger': false,
+      };
+    }
+    return config;
+  },
 };
 
 export default nextConfig;
