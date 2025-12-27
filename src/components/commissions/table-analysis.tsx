@@ -61,14 +61,26 @@ export default function TableAnalysis() {
     const fetchData = async () => {
         setLoading(true);
         const tableName = selectedTable;
-        const periodColumn = tableName === 'Parametros' ? 'PERIODO' : 'PERIODO_SUBIDA_DATA';
         const primaryKey = tableName === 'Parametros' ? 'id' : 'COD_PEDIDO';
 
 
         let query = supabase.from(tableName).select('*');
 
         if (selectedPeriod) {
-            query = query.eq(periodColumn, selectedPeriod);
+            if (tableName === 'Parametros') {
+                // Para Parametros, filtrar por el campo PERIODO (formato: 202504)
+                query = query.eq('PERIODO', selectedPeriod);
+            } else {
+                // Para SalesRecord, filtrar por FECHA_SUBIDA_DATA (tipo date)
+                // Convertir el periodo (202504) a rango de fechas del mes
+                const year = selectedPeriod.substring(0, 4);
+                const month = selectedPeriod.substring(4, 6);
+                const startDate = `${year}-${month}-01`;
+                const nextMonth = parseInt(month) === 12 ? '01' : String(parseInt(month) + 1).padStart(2, '0');
+                const nextYear = parseInt(month) === 12 ? String(parseInt(year) + 1) : year;
+                const endDate = `${nextYear}-${nextMonth}-01`;
+                query = query.gte('FECHA_SUBIDA_DATA', startDate).lt('FECHA_SUBIDA_DATA', endDate);
+            }
         }
         
         const { data, error } = await query.order(primaryKey, { ascending: true });
@@ -217,7 +229,7 @@ export default function TableAnalysis() {
                     <TableHead>CANAL</TableHead>
                     <TableHead>TIPO_ESTADO</TableHead>
                     <TableHead>FECHA_INSTALADO</TableHead>
-                    <TableHead>PERIODO_SUBIDA_DATA</TableHead>
+                    <TableHead>FECHA_SUBIDA_DATA</TableHead>
                 </TableRow>
             </TableHeader>
             <TableBody>
@@ -236,7 +248,7 @@ export default function TableAnalysis() {
                         <TableCell>{row.CANAL}</TableCell>
                         <TableCell>{row.TIPO_ESTADO}</TableCell>
                         <TableCell>{formatDate(row.FECHA_INSTALADO)}</TableCell>
-                        <TableCell>{formatPeriod(row.PERIODO_SUBIDA_DATA)}</TableCell>
+                        <TableCell>{formatDate(row.FECHA_SUBIDA_DATA)}</TableCell>
                     </TableRow>
                 ))}
             </TableBody>

@@ -44,7 +44,7 @@ export default function UploadSalesPage() {
   const handleTestConnection = async () => {
     setIsTesting(true);
     toast({ title: "Probando conexión..." });
-    const testRecord = { COD_PEDIDO: Math.floor(Date.now() / 1000), DNI_CLIENTE: "12345678", DEPARTAMENTO: "LIMA", PROVINCIA: "LIMA", DISTRITO: "MIRAFLORES", ID_PREDIO: 101, PREDIO: "PREDIO DE PRUEBA", FECHA_VENTA: new Date().toISOString(), TIPO_VENTA: "NUEVA", PRECIO_CON_IGV: 99.90, ORIGEN_VENTA: "TEST_CONNECTION", DNI_ASESOR: "87654321", ASESOR: "ASESOR DE PRUEBA", CANAL: "PRUEBA", TIPO_ESTADO: "ACTIVO", PROCESADO: "NO", INSTALADO: 0, PERIODO: 202401, PERIODO_ALTA: 202401 };
+    const testRecord = { COD_PEDIDO: Math.floor(Date.now() / 1000), DNI_CLIENTE: "12345678", DEPARTAMENTO: "LIMA", PROVINCIA: "LIMA", DISTRITO: "MIRAFLORES", ID_PREDIO: 101, PREDIO: "PREDIO DE PRUEBA", FECHA_VENTA: new Date().toISOString(), TIPO_VENTA: "NUEVA", PRECIO_CON_IGV: 99.90, ORIGEN_VENTA: "TEST_CONNECTION", DNI_ASESOR: "87654321", ASESOR: "ASESOR DE PRUEBA", CANAL: "PRUEBA", TIPO_ESTADO: "ACTIVO", PROCESADO: "NO", INSTALADO: "0", PERIODO: 202401, PERIODO_ALTA: 202401 };
     const { error } = await supabase.from('SalesRecord').insert([testRecord]);
     if (error) {
       toast({ title: "Error de Conexión", description: error.message, variant: "destructive" });

@@ -1,9 +1,11 @@
 // src/workers/csv-processor.ts
 import Papa from 'papaparse';
 
-const TIMESTAMP_FIELDS = ["FECHA_VENTA", "FECHA_VALIDACION", "INSTALADO_REGISTRO", "FECHA_INSTALADO", "WS_RECIBO1_EMISION", "RECIBO1_PAGADO", "WS_RECIBO2_EMISION", "RECIBO2_PAGADO", "WS_2PAGOC_EMISION", "2_PAGOS_COMPLETOS", "WS_RECIBO3_EMISION", "RECIBO3_PAGADO"];
-const INTEGER_FIELDS = ["COD_PEDIDO", "ID_PREDIO", "ANCHO_BANDA", "WIN_BOX", "PLAN_GAMER", "PLAN_WIN_TV", "PLAN_DTV_GO", "PLAN_DTV_FULL", "WIN_GAMES", "FONO_WIN", "PLAN_DGO_L1MAX", "PLAN_L1MAX", "PLAN_WIN_TV_PLUS", "PLAN_WIN_TV_PREMIUM", "PLAN_WIN_TV_L1MAX", "PLAN_WIN_TV_L1MAX_PREMIUM", "HEREDADO", "INSTALADO", "CODIGO_INSTALADO", "PERIODO", "PERIODO_ALTA"];
-const FLOAT_FIELDS = ["PRECIO_CON_IGV", "PRECIO_CON_IGV_EXTERNO"];
+const TIMESTAMP_FIELDS = ["FECHA_VENTA", "FECHA_VALIDACION", "INSTALADO_REGISTRO", "FECHA_INSTALADO", "WS_RECIBO1_EMISION", "RECIBO1_PAGADO", "WS_RECIBO2_EMISION", "RECIBO2_PAGADO", "WS_2PAGOC_EMISION", "2_PAGOS_COMPLETOS", "WS_RECIBO3_EMISION", "RECIBO3_PAGADO", "WS_RECIBO1_VENCIMIENTO", "WS_RECIBO2_VENCIMIENTO", "WS_RECIBO3_VENCIMIENTO"];
+const DATE_FIELDS = ["FECHA_SUBIDA_DATA"];
+const INTEGER_FIELDS = ["COD_PEDIDO", "ID_PREDIO", "ANCHO_BANDA", "WIN_BOX", "PLAN_GAMER", "PLAN_WIN_TV", "PLAN_DTV_GO", "PLAN_DTV_FULL", "WIN_GAMES", "FONO_WIN", "DGO_L1MAX", "PLAN_L1MAX", "PLAN_WIN_TV_PLUS", "PLAN_WIN_TV_PREMIUM", "PLAN_WIN_TV_L1MAX", "PLAN_WIN_TV_L1MAX_PREMIUM", "CODIGO_INSTALADO", "PERIODO", "PERIODO_ALTA", "CORTE_1", "CORTE_2", "CORTE_3", "CORTE_4", "PERIODO_COMI"];
+const FLOAT_FIELDS = ["PRECIO_CON_IGV", "PRECIO_CON_IGV_EXTERNO", "PRECIO_CON_IGV_STAFF"];
+const STRING_FIELDS = ["HEREDADO", "INSTALADO"];
 
 /**
  * Convierte una fecha en formato 'DD/MM/YYYY' o 'DD/MM/YYYY HH:mm:ss' al formato ISO 'YYYY-MM-DDTHH:mm:ssZ'.
@@ -60,7 +62,12 @@ self.onmessage = (event) => {
             if (value === '' || value === null) return null;
             
             if (TIMESTAMP_FIELDS.includes(headerStr)) {
-                return convertToISO(value); // ¡AQUÍ ESTÁ LA CORRECCIÓN!
+                return convertToISO(value);
+            }
+            if (DATE_FIELDS.includes(headerStr)) {
+                // Convierte a formato YYYY-MM-DD para campos de tipo date
+                const isoResult = convertToISO(value);
+                return isoResult ? isoResult.split('T')[0] : null;
             }
             if (INTEGER_FIELDS.includes(headerStr)) {
                 const parsed = parseInt(value, 10);
@@ -69,6 +76,10 @@ self.onmessage = (event) => {
             if (FLOAT_FIELDS.includes(headerStr)) {
                 const parsed = parseFloat(value);
                 return isNaN(parsed) ? null : parsed;
+            }
+            if (STRING_FIELDS.includes(headerStr)) {
+                // Campos que ahora son varchar en lugar de integer
+                return String(value);
             }
             return value;
         },

@@ -73,7 +73,7 @@ export interface SalesRecord {
     PLAN_DTV_FULL?: number | null;
     WIN_GAMES?: number | null;
     FONO_WIN?: number | null;
-    PLAN_DGO_L1MAX?: number | null;
+    DGO_L1MAX?: number | null;
     PLAN_L1MAX?: number | null;
     PLAN_WIN_TV_PLUS?: number | null;
     PLAN_WIN_TV_PREMIUM?: number | null;
@@ -90,10 +90,10 @@ export interface SalesRecord {
     TIPO_ESTADO?: string | null;
     TIPO_MOTIVO?: string | null;
     PROCESADO?: string | null;
-    HEREDADO?: number | null;
+    HEREDADO?: string | null;
     ARBITRADO?: string | null;
     RESULTADO_ARBITRAJE?: string | null;
-    INSTALADO?: number | null;
+    INSTALADO?: string | null;
     FECHA_INSTALADO?: string | null;
     CODIGO_INSTALADO?: number | null;
     WS_RECIBO1_EMISION?: string | null;
@@ -106,7 +106,18 @@ export interface SalesRecord {
     RECIBO3_PAGADO?: string | null;
     PERIODO?: number | null;
     PERIODO_ALTA?: number | null;
-    PERIODO_SUBIDA_DATA?: number | null;
-    RUC?: string;
-    AGENCIA?: string;
+    FECHA_SUBIDA_DATA?: string | null;
+    PRECIO_CON_IGV_STAFF?: number | null;
+    TIPO_VALIDACION?: string | null;
+    GRUPO?: string | null;
+    WS_RECIBO1_VENCIMIENTO?: string | null;
+    CORTE_1?: number | null;
+    CORTE_2?: number | null;
+    WS_RECIBO2_VENCIMIENTO?: string | null;
+    CORTE_3?: number | null;
+    WS_RECIBO3_VENCIMIENTO?: string | null;
+    CORTE_4?: number | null;
+    MODULO_VENTA?: string | null;
+    MODULO_CIUDAD?: string | null;
+    PERIODO_COMI?: number | null;
 }
