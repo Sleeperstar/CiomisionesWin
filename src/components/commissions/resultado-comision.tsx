@@ -15,6 +15,12 @@ const monthMap: { [key: string]: number } = {
     julio: 7, agosto: 8, septiembre: 9, octubre: 10, noviembre: 11, diciembre: 12
 };
 
+// Extraer número del corte de "corte-1" → 1
+const getCorteNumber = (corte: string): number => {
+    const match = corte.match(/corte-(\d+)/i);
+    return match ? parseInt(match[1], 10) : 1;
+};
+
 // Estructura para los datos agregados desde Supabase RPC
 interface ComisionResumen {
     ruc: string | null;
@@ -27,17 +33,20 @@ interface ComisionResumen {
     corte_3: number;
     corte_4: number;
     precio_sin_igv_promedio: number;
+    // Nuevos campos calculados
+    porcentaje_cumplimiento: number;
+    factor_multiplicador: number;
+    total_a_pagar: number;
 }
 
 // Interfaz para los totales
 interface Totals {
     totalAltas: number;
     totalMeta: number;
-    totalCorte1: number;
-    totalCorte2: number;
-    totalCorte3: number;
-    totalCorte4: number;
+    totalCorteSeleccionado: number;
     avgPrecio: number;
+    avgCumplimiento: number;
+    totalPagar: number;
 }
 
 export default function ResultadoComision({ corte, zona, mes }: { corte: string; zona: string; mes: string }) {
@@ -76,6 +85,9 @@ export default function ResultadoComision({ corte, zona, mes }: { corte: string;
         setSortConfig({ key, direction });
     };
 
+    // Obtener número del corte seleccionado
+    const corteNumber = getCorteNumber(corte);
+
     useEffect(() => {
         const fetchData = async () => {
             setData([]);
@@ -92,12 +104,12 @@ export default function ResultadoComision({ corte, zona, mes }: { corte: string;
             const year = 2025;
 
             try {
-                // UNA SOLA CONSULTA: La función RPC incluye JOIN con Parametros
-                // Trae: ruc, agencia, meta, top, altas, corte_1-4, precio_sin_igv_promedio
+                // UNA SOLA CONSULTA: La función RPC calcula todo incluyendo % cumplimiento, factor y total
                 const { data: rpcData, error: rpcError } = await supabase.rpc('get_comisiones_resumen', {
                     p_zona: zona,
                     p_mes: monthNumber,
-                    p_year: year
+                    p_year: year,
+                    p_corte: corteNumber  // Nuevo parámetro: corte seleccionado
                 });
 
                 if (rpcError) {
@@ -115,24 +127,38 @@ export default function ResultadoComision({ corte, zona, mes }: { corte: string;
                     corte_2: Number(row.corte_2) || 0,
                     corte_3: Number(row.corte_3) || 0,
                     corte_4: Number(row.corte_4) || 0,
-                    precio_sin_igv_promedio: Number(row.precio_sin_igv_promedio) || 0
+                    precio_sin_igv_promedio: Number(row.precio_sin_igv_promedio) || 0,
+                    porcentaje_cumplimiento: Number(row.porcentaje_cumplimiento) || 0,
+                    factor_multiplicador: Number(row.factor_multiplicador) || 1.3,
+                    total_a_pagar: Number(row.total_a_pagar) || 0
                 }));
 
                 setData(processedData);
 
+                // Obtener el corte seleccionado para los totales
+                const getCorteValue = (row: ComisionResumen) => {
+                    switch (corteNumber) {
+                        case 1: return row.corte_1;
+                        case 2: return row.corte_2;
+                        case 3: return row.corte_3;
+                        case 4: return row.corte_4;
+                        default: return row.corte_1;
+                    }
+                };
+
                 // Calcular totales
                 const totalAltas = processedData.reduce((sum, row) => sum + row.altas, 0);
                 const totalMeta = processedData.reduce((sum, row) => sum + row.meta, 0);
-                const totalCorte1 = processedData.reduce((sum, row) => sum + row.corte_1, 0);
-                const totalCorte2 = processedData.reduce((sum, row) => sum + row.corte_2, 0);
-                const totalCorte3 = processedData.reduce((sum, row) => sum + row.corte_3, 0);
-                const totalCorte4 = processedData.reduce((sum, row) => sum + row.corte_4, 0);
+                const totalCorteSeleccionado = processedData.reduce((sum, row) => sum + getCorteValue(row), 0);
                 const totalPrecio = processedData.reduce((sum, row) => sum + row.precio_sin_igv_promedio, 0);
                 const avgPrecio = processedData.length > 0 ? totalPrecio / processedData.length : 0;
+                const totalCumplimiento = processedData.reduce((sum, row) => sum + row.porcentaje_cumplimiento, 0);
+                const avgCumplimiento = processedData.length > 0 ? totalCumplimiento / processedData.length : 0;
+                const totalPagar = processedData.reduce((sum, row) => sum + row.total_a_pagar, 0);
 
-                setTotals({ totalAltas, totalMeta, totalCorte1, totalCorte2, totalCorte3, totalCorte4, avgPrecio });
+                setTotals({ totalAltas, totalMeta, totalCorteSeleccionado, avgPrecio, avgCumplimiento, totalPagar });
 
-                console.log(`[Resultado Comision] ✅ Cargados ${processedData.length} registros en UNA sola consulta RPC`);
+                console.log(`[Resultado Comision] ✅ Cargados ${processedData.length} registros para Corte ${corteNumber}`);
 
             } catch (error: unknown) {
                 console.error(`Error fetching comisiones:`, error);
@@ -144,7 +170,7 @@ export default function ResultadoComision({ corte, zona, mes }: { corte: string;
         };
 
         fetchData();
-    }, [corte, zona, mes, toast]);
+    }, [corte, zona, mes, corteNumber, toast]);
 
 
     // Componente para el botón de ordenar
@@ -172,22 +198,47 @@ export default function ResultadoComision({ corte, zona, mes }: { corte: string;
         );
     }
 
+    // Función para obtener el valor del corte seleccionado
+    const getCorteValue = (row: ComisionResumen) => {
+        switch (corteNumber) {
+            case 1: return row.corte_1;
+            case 2: return row.corte_2;
+            case 3: return row.corte_3;
+            case 4: return row.corte_4;
+            default: return row.corte_1;
+        }
+    };
+
+    // Función para obtener el color del % cumplimiento
+    const getCumplimientoColor = (pct: number) => {
+        if (pct >= 100) return 'text-green-600 bg-green-100 dark:bg-green-900/30';
+        if (pct >= 90) return 'text-blue-600 bg-blue-100 dark:bg-blue-900/30';
+        if (pct >= 80) return 'text-yellow-600 bg-yellow-100 dark:bg-yellow-900/30';
+        if (pct >= 70) return 'text-orange-600 bg-orange-100 dark:bg-orange-900/30';
+        return 'text-red-600 bg-red-100 dark:bg-red-900/30';
+    };
+
     return (
         <Card className="border-0 shadow-lg bg-gradient-to-br from-white to-orange-50/30 dark:from-slate-900 dark:to-slate-800 overflow-hidden">
             <CardHeader className="pb-4 border-b text-white rounded-t-lg" style={{ background: 'linear-gradient(135deg, #f53c00 0%, #ff8300 50%, #ffa700 100%)' }}>
                 <div className="flex items-center justify-between flex-wrap gap-4">
                     <div>
-                        <CardTitle className="text-xl font-bold tracking-tight">Resultado de Comisiones</CardTitle>
+                        <CardTitle className="text-xl font-bold tracking-tight">
+                            Resultado de Comisiones - Corte {corteNumber}
+                        </CardTitle>
                         <CardDescription className="text-orange-100 mt-1">
-                            Resumen calculado por agencia • {data.length} agencias
+                            {data.length} agencias • {mes.charAt(0).toUpperCase() + mes.slice(1)} 2025 • {zona.charAt(0).toUpperCase() + zona.slice(1)}
                         </CardDescription>
                     </div>
-                    <div className="flex gap-3">
+                    <div className="flex flex-wrap gap-2">
                         <Badge variant="secondary" className="bg-white/25 text-white border-white/40 px-3 py-1.5 font-semibold">
-                            Total Altas: {totals?.totalAltas.toLocaleString('es-PE') || 0}
+                            Altas: {totals?.totalAltas.toLocaleString('es-PE') || 0}
                         </Badge>
                         <Badge variant="secondary" className="bg-white/25 text-white border-white/40 px-3 py-1.5 font-semibold">
-                            Total Meta: {totals?.totalMeta.toLocaleString('es-PE') || 0}
+                            Meta: {totals?.totalMeta.toLocaleString('es-PE') || 0}
+                        </Badge>
+                        <Badge variant="secondary" className="bg-green-500/80 text-white border-green-400/40 px-3 py-1.5 font-semibold">
+                            Total a Pagar: S/ {totals?.totalPagar.toLocaleString('es-PE', { minimumFractionDigits: 2 }) || '0.00'}
                         </Badge>
                     </div>
                 </div>
@@ -213,19 +264,19 @@ export default function ResultadoComision({ corte, zona, mes }: { corte: string;
                                     <SortButton columnKey="altas">ALTAS</SortButton>
                                 </TableHead>
                                 <TableHead className="whitespace-nowrap px-3 py-2 border-b-2 border-[#f53c00]">
-                                    <SortButton columnKey="corte_1">CORTE 1</SortButton>
+                                    <SortButton columnKey="porcentaje_cumplimiento">% CUMPL.</SortButton>
                                 </TableHead>
                                 <TableHead className="whitespace-nowrap px-3 py-2 border-b-2 border-[#ff8300]">
-                                    <SortButton columnKey="corte_2">CORTE 2</SortButton>
+                                    <SortButton columnKey="factor_multiplicador">FACTOR</SortButton>
                                 </TableHead>
                                 <TableHead className="whitespace-nowrap px-3 py-2 border-b-2 border-[#ffa700]">
-                                    <SortButton columnKey="corte_3">CORTE 3</SortButton>
+                                    <SortButton columnKey={`corte_${corteNumber}` as keyof ComisionResumen}>CORTE {corteNumber}</SortButton>
                                 </TableHead>
                                 <TableHead className="whitespace-nowrap px-3 py-2 border-b-2 border-[#f53c00]">
-                                    <SortButton columnKey="corte_4">CORTE 4</SortButton>
+                                    <SortButton columnKey="precio_sin_igv_promedio">PRECIO S/IGV</SortButton>
                                 </TableHead>
                                 <TableHead className="whitespace-nowrap px-3 py-2 border-b-2 border-[#ffa700]">
-                                    <SortButton columnKey="precio_sin_igv_promedio">PRECIO S/IGV</SortButton>
+                                    <SortButton columnKey="total_a_pagar">TOTAL PAGAR</SortButton>
                                 </TableHead>
                             </TableRow>
                         </TableHeader>
@@ -252,7 +303,7 @@ export default function ResultadoComision({ corte, zona, mes }: { corte: string;
                                         `}
                                     >
                                         <TableCell className="font-mono text-sm px-3 py-2.5 whitespace-nowrap">{row.ruc}</TableCell>
-                                        <TableCell className="text-sm px-3 py-2.5 whitespace-nowrap max-w-[200px] truncate font-medium" title={row.agencia || ''}>
+                                        <TableCell className="text-sm px-3 py-2.5 whitespace-nowrap max-w-[180px] truncate font-medium" title={row.agencia || ''}>
                                             {row.agencia}
                                         </TableCell>
                                         <TableCell className="text-sm px-3 py-2.5 whitespace-nowrap text-center">
@@ -264,8 +315,10 @@ export default function ResultadoComision({ corte, zona, mes }: { corte: string;
                                             <Badge 
                                                 variant="secondary" 
                                                 className={`font-semibold ${
-                                                    row.top === 'SI' 
-                                                        ? 'bg-[#ffa700]/20 text-[#f53c00] border border-[#ffa700]' 
+                                                    row.top === 'GOLD' 
+                                                        ? 'bg-yellow-400/30 text-yellow-700 border border-yellow-500'
+                                                        : row.top === 'SILVER'
+                                                        ? 'bg-slate-300/30 text-slate-600 border border-slate-400'
                                                         : 'bg-slate-100 text-slate-500'
                                                 }`}
                                             >
@@ -275,20 +328,24 @@ export default function ResultadoComision({ corte, zona, mes }: { corte: string;
                                         <TableCell className="text-sm px-3 py-2.5 whitespace-nowrap text-center">
                                             <span className="font-bold text-[#f53c00] text-lg">{row.altas}</span>
                                         </TableCell>
-                                        <TableCell className="text-sm px-3 py-2.5 whitespace-nowrap text-center font-medium">
-                                            {row.corte_1}
+                                        <TableCell className="text-sm px-3 py-2.5 whitespace-nowrap text-center">
+                                            <Badge className={`font-bold ${getCumplimientoColor(row.porcentaje_cumplimiento)}`}>
+                                                {row.porcentaje_cumplimiento.toFixed(1)}%
+                                            </Badge>
+                                        </TableCell>
+                                        <TableCell className="text-sm px-3 py-2.5 whitespace-nowrap text-center font-bold text-[#ff8300]">
+                                            x{row.factor_multiplicador.toFixed(1)}
                                         </TableCell>
                                         <TableCell className="text-sm px-3 py-2.5 whitespace-nowrap text-center font-medium">
-                                            {row.corte_2}
-                                        </TableCell>
-                                        <TableCell className="text-sm px-3 py-2.5 whitespace-nowrap text-center font-medium">
-                                            {row.corte_3}
-                                        </TableCell>
-                                        <TableCell className="text-sm px-3 py-2.5 whitespace-nowrap text-center font-medium">
-                                            {row.corte_4}
+                                            {getCorteValue(row)}
                                         </TableCell>
                                         <TableCell className="text-sm px-3 py-2.5 whitespace-nowrap text-right font-mono">
                                             S/ {row.precio_sin_igv_promedio.toFixed(2)}
+                                        </TableCell>
+                                        <TableCell className="text-sm px-3 py-2.5 whitespace-nowrap text-right">
+                                            <span className="font-bold text-green-600 dark:text-green-400">
+                                                S/ {row.total_a_pagar.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                                            </span>
                                         </TableCell>
                                     </TableRow>
                                 ))
@@ -306,12 +363,20 @@ export default function ResultadoComision({ corte, zona, mes }: { corte: string;
                                 <TableCell className="text-center px-3 py-3">
                                     <Badge className="bg-[#f53c00] text-white text-lg px-3">{totals?.totalAltas}</Badge>
                                 </TableCell>
-                                <TableCell className="text-center px-3 py-3 text-slate-700 dark:text-slate-200">{totals?.totalCorte1}</TableCell>
-                                <TableCell className="text-center px-3 py-3 text-slate-700 dark:text-slate-200">{totals?.totalCorte2}</TableCell>
-                                <TableCell className="text-center px-3 py-3 text-slate-700 dark:text-slate-200">{totals?.totalCorte3}</TableCell>
-                                <TableCell className="text-center px-3 py-3 text-slate-700 dark:text-slate-200">{totals?.totalCorte4}</TableCell>
+                                <TableCell className="text-center px-3 py-3 text-slate-700 dark:text-slate-200">
+                                    {totals?.avgCumplimiento.toFixed(1)}%
+                                </TableCell>
+                                <TableCell className="text-center px-3 py-3 text-slate-500">-</TableCell>
+                                <TableCell className="text-center px-3 py-3 text-slate-700 dark:text-slate-200">
+                                    {totals?.totalCorteSeleccionado}
+                                </TableCell>
                                 <TableCell className="text-right px-3 py-3 font-mono text-slate-700 dark:text-slate-200">
                                     S/ {totals?.avgPrecio.toFixed(2)}
+                                </TableCell>
+                                <TableCell className="text-right px-3 py-3">
+                                    <Badge className="bg-green-600 text-white text-base px-3 py-1">
+                                        S/ {totals?.totalPagar.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                                    </Badge>
                                 </TableCell>
                             </TableRow>
                         </TableFooter>
