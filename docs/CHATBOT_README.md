@@ -8,14 +8,30 @@ Chatbot inteligente que permite consultar información sobre comisiones, ventas 
 
 ### 1. Instalar dependencias
 
-```bash
-npm install openai
+La dependencia `openai` ya está agregada en `package.json`:
+
+```json
+"openai": "^4.77.0"
 ```
 
 ### 2. Configurar variables de entorno
 
-Crea o edita el archivo `.env.local` en la raíz del proyecto:
+#### Para despliegue en Vercel (recomendado):
 
+1. Ve a tu proyecto en Vercel
+2. **Settings** > **Environment Variables**
+3. Agrega:
+   - **Name**: `OPENAI_API_KEY`
+   - **Value**: Tu API key de OpenAI
+   - **Environment**: Production, Preview y Development
+4. Re-despliega el proyecto
+
+#### Para desarrollo local (opcional):
+
+Crea el archivo `.env.local` en la raíz:
+
+```env
+OPENAI_API_KEY=tu_api_key_aqui
 
 # Supabase (ya configurado)
 NEXT_PUBLIC_SUPABASE_URL=tu_url_de_supabase
@@ -24,10 +40,14 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=tu_clave_anon
 
 **⚠️ IMPORTANTE**: Nunca compartas tu API key públicamente ni la subas a Git.
 
-### 3. Iniciar el servidor
+### 3. Desplegar
+
+Haz push a Git y Vercel desplegará automáticamente:
 
 ```bash
-npm run dev
+git add .
+git commit -m "Add chatbot integration"
+git push
 ```
 
 El chatbot estará disponible en: `http://localhost:9002/chatbot`

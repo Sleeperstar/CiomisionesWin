@@ -2,33 +2,37 @@
 
 ## 📦 Pasos para completar la configuración:
 
-### 1. Instalar dependencia de OpenAI
+### 1. ✅ Agregar dependencia al package.json
 
-Abre una terminal (CMD, PowerShell o Git Bash) y ejecuta:
+**Ya está hecho**: Se agregó `"openai": "^4.77.0"` a las dependencias en `package.json`
 
-```bash
-npm install openai
-```
+### 2. Configurar variable de entorno en Vercel
 
-### 2. Crear archivo `.env.local`
+Como despliegas en Vercel, debes agregar la API key como variable de entorno:
 
-Crea un archivo llamado `.env.local` en la raíz del proyecto con el siguiente contenido:
+1. Ve a tu proyecto en Vercel: https://vercel.com/
+2. Click en **Settings** > **Environment Variables**
+3. Agrega una nueva variable:
 
+   - **Environment**: Selecciona **Production**, **Preview** y **Development**
+4. Click en **Save**
 
+### 3. Re-desplegar en Vercel
 
-**⚠️ IMPORTANTE**: Este archivo no se subirá a Git (está en .gitignore). Nunca compartas esta clave públicamente.
+Después de agregar la variable de entorno:
 
-### 3. Reiniciar el servidor de desarrollo
+1. Haz push de los cambios a Git:
+   ```bash
+   git add .
+   git commit -m "Add chatbot with OpenAI integration"
+   git push
+   ```
 
-Si el servidor ya estaba corriendo, deténlo (Ctrl+C) y vuelve a iniciarlo:
-
-```bash
-npm run dev
-```
+2. Vercel desplegará automáticamente con la nueva dependencia y variable de entorno
 
 ### 4. Probar el chatbot
 
-1. Abre tu navegador en: `http://localhost:9002/chatbot`
+1. Una vez desplegado, visita: `https://tu-dominio.vercel.app/chatbot`
 2. Deberías ver la opción "Chatbot IA" en el menú lateral
 3. Prueba con estas preguntas de ejemplo:
    - "¿Cuánto comisionó ALIV TELECOM en abril corte 1?"
