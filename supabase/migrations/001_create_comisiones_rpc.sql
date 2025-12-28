@@ -51,8 +51,9 @@ CREATE TABLE IF NOT EXISTS bono_1_arpu (
 -- ============================================================================
 -- Incluye:
 --   - Factores GOLD/SILVER/REGULAR según TOP
---   - Marcha Blanca: Si tiene = factor 2.5 automático
---   - Bono ARPU: Si tiene = multiplicador_final + 1
+--   - Marcha Blanca: Si = factor 2.5, meta y % cumplimiento = NULL (mostrar "-")
+--   - Meta = 0 sin marcha blanca: meta = 100 por defecto
+--   - Bono ARPU: Si = multiplicador_final + 1
 --   - Total a Pagar usa multiplicador_final
 -- ============================================================================
 
@@ -99,7 +100,12 @@ BEGIN
     SELECT 
         datos.ruc,
         datos.agencia,
-        datos.meta,
+        -- META: NULL si tiene marcha blanca, 100 si es 0, sino el valor real
+        CASE 
+            WHEN UPPER(COALESCE(mb.marcha_blanca, 'No')) IN ('SÍ', 'SI') THEN NULL::BIGINT
+            WHEN COALESCE(datos.meta_original, 0) = 0 THEN 100::BIGINT
+            ELSE datos.meta_original
+        END as meta,
         datos.top,
         datos.altas,
         datos.corte_1,
@@ -107,10 +113,17 @@ BEGIN
         datos.corte_3,
         datos.corte_4,
         datos.precio_sin_igv_promedio,
-        -- % Cumplimiento
+        -- % Cumplimiento: NULL si tiene marcha blanca, sino calcular
         CASE 
-            WHEN datos.meta > 0 THEN ROUND((datos.altas::NUMERIC / datos.meta::NUMERIC) * 100, 2)
-            ELSE 0
+            WHEN UPPER(COALESCE(mb.marcha_blanca, 'No')) IN ('SÍ', 'SI') THEN NULL::NUMERIC
+            ELSE 
+                CASE 
+                    WHEN COALESCE(datos.meta_original, 0) = 0 THEN 
+                        ROUND((datos.altas::NUMERIC / 100::NUMERIC) * 100, 2)
+                    WHEN datos.meta_original > 0 THEN 
+                        ROUND((datos.altas::NUMERIC / datos.meta_original::NUMERIC) * 100, 2)
+                    ELSE 0
+                END
         END as porcentaje_cumplimiento,
         -- Marcha Blanca (Sí/No)
         COALESCE(mb.marcha_blanca, 'No')::TEXT as marcha_blanca,
@@ -198,7 +211,7 @@ BEGIN
         SELECT 
             ventas.ruc,
             ventas.agencia,
-            COALESCE(p."META", 0)::BIGINT as meta,
+            COALESCE(p."META", 0)::BIGINT as meta_original,
             COALESCE(p."TOP", 'REGULAR')::TEXT as top,
             ventas.altas,
             ventas.corte_1,
@@ -206,10 +219,10 @@ BEGIN
             ventas.corte_3,
             ventas.corte_4,
             ventas.precio_sin_igv_promedio,
+            -- % cumplimiento para JOINs con tablas de factores
             CASE 
-                WHEN COALESCE(p."META", 0) > 0 
-                THEN (ventas.altas::NUMERIC / p."META"::NUMERIC) * 100
-                ELSE 0
+                WHEN COALESCE(p."META", 0) = 0 THEN (ventas.altas::NUMERIC / 100::NUMERIC) * 100
+                ELSE (ventas.altas::NUMERIC / p."META"::NUMERIC) * 100
             END as pct_cumplimiento
         FROM (
             SELECT 
@@ -265,7 +278,8 @@ GRANT EXECUTE ON FUNCTION get_comisiones_resumen(TEXT, INTEGER, INTEGER, INTEGER
 COMMENT ON FUNCTION get_comisiones_resumen(TEXT, INTEGER, INTEGER, INTEGER) IS 
 'Calcula comisiones con:
 - Factores GOLD/SILVER/REGULAR según TOP
-- Marcha Blanca: Si = factor 2.5 automático
+- Marcha Blanca: Si = factor 2.5, meta y % cumplimiento = NULL (mostrar "-")
+- Meta = 0 sin marcha blanca: meta = 100 por defecto
 - Bono ARPU: Si = multiplicador_final + 1
 - Total a Pagar usa multiplicador_final';
 

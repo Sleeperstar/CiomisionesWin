@@ -25,7 +25,7 @@ const getCorteNumber = (corte: string): number => {
 interface ComisionResumen {
     ruc: string | null;
     agencia: string | null;
-    meta: number;
+    meta: number | null;  // null para marcha blanca
     top: string | null;
     altas: number;
     corte_1: number;
@@ -34,7 +34,7 @@ interface ComisionResumen {
     corte_4: number;
     precio_sin_igv_promedio: number;
     // Campos calculados
-    porcentaje_cumplimiento: number;
+    porcentaje_cumplimiento: number | null;  // null para marcha blanca
     marcha_blanca: string;
     bono_arpu: string;
     factor_multiplicador: number;
@@ -123,7 +123,7 @@ export default function ResultadoComision({ corte, zona, mes }: { corte: string;
                 const processedData: ComisionResumen[] = (rpcData || []).map((row: ComisionResumen) => ({
                     ruc: row.ruc,
                     agencia: row.agencia,
-                    meta: Number(row.meta) || 0,
+                    meta: row.meta === null ? null : Number(row.meta),  // Preservar null para marcha blanca
                     top: row.top || 'N/A',
                     altas: Number(row.altas) || 0,
                     corte_1: Number(row.corte_1) || 0,
@@ -131,7 +131,7 @@ export default function ResultadoComision({ corte, zona, mes }: { corte: string;
                     corte_3: Number(row.corte_3) || 0,
                     corte_4: Number(row.corte_4) || 0,
                     precio_sin_igv_promedio: Number(row.precio_sin_igv_promedio) || 0,
-                    porcentaje_cumplimiento: Number(row.porcentaje_cumplimiento) || 0,
+                    porcentaje_cumplimiento: row.porcentaje_cumplimiento === null ? null : Number(row.porcentaje_cumplimiento),  // Preservar null
                     marcha_blanca: row.marcha_blanca || 'No',
                     bono_arpu: row.bono_arpu || 'No',
                     factor_multiplicador: Number(row.factor_multiplicador) || 1.3,
@@ -152,14 +152,16 @@ export default function ResultadoComision({ corte, zona, mes }: { corte: string;
                     }
                 };
 
-                // Calcular totales
+                // Calcular totales (ignorando null para meta y % cumplimiento)
                 const totalAltas = processedData.reduce((sum, row) => sum + row.altas, 0);
-                const totalMeta = processedData.reduce((sum, row) => sum + row.meta, 0);
+                const totalMeta = processedData.reduce((sum, row) => sum + (row.meta ?? 0), 0);
                 const totalCorteSeleccionado = processedData.reduce((sum, row) => sum + getCorteValue(row), 0);
                 const totalPrecio = processedData.reduce((sum, row) => sum + row.precio_sin_igv_promedio, 0);
                 const avgPrecio = processedData.length > 0 ? totalPrecio / processedData.length : 0;
-                const totalCumplimiento = processedData.reduce((sum, row) => sum + row.porcentaje_cumplimiento, 0);
-                const avgCumplimiento = processedData.length > 0 ? totalCumplimiento / processedData.length : 0;
+                // Solo calcular promedio de % cumplimiento para agencias que no tienen marcha blanca
+                const agenciasSinMarchaBlanca = processedData.filter(row => row.porcentaje_cumplimiento !== null);
+                const totalCumplimiento = agenciasSinMarchaBlanca.reduce((sum, row) => sum + (row.porcentaje_cumplimiento ?? 0), 0);
+                const avgCumplimiento = agenciasSinMarchaBlanca.length > 0 ? totalCumplimiento / agenciasSinMarchaBlanca.length : 0;
                 const totalPagar = processedData.reduce((sum, row) => sum + row.total_a_pagar, 0);
 
                 setTotals({ totalAltas, totalMeta, totalCorteSeleccionado, avgPrecio, avgCumplimiento, totalPagar });
@@ -322,9 +324,13 @@ export default function ResultadoComision({ corte, zona, mes }: { corte: string;
                                             {row.agencia}
                                         </TableCell>
                                         <TableCell className="text-xs px-2 py-2 whitespace-nowrap text-center">
-                                            <Badge variant="outline" className="border-[#ff8300] text-[#f53c00] font-semibold text-xs">
-                                                {row.meta}
-                                            </Badge>
+                                            {row.meta === null ? (
+                                                <span className="text-slate-400 font-medium">-</span>
+                                            ) : (
+                                                <Badge variant="outline" className="border-[#ff8300] text-[#f53c00] font-semibold text-xs">
+                                                    {row.meta}
+                                                </Badge>
+                                            )}
                                         </TableCell>
                                         <TableCell className="text-xs px-2 py-2 whitespace-nowrap text-center">
                                             <Badge 
@@ -344,9 +350,13 @@ export default function ResultadoComision({ corte, zona, mes }: { corte: string;
                                             <span className="font-bold text-[#f53c00]">{row.altas}</span>
                                         </TableCell>
                                         <TableCell className="text-xs px-2 py-2 whitespace-nowrap text-center">
-                                            <Badge className={`font-bold text-xs ${getCumplimientoColor(row.porcentaje_cumplimiento)}`}>
-                                                {row.porcentaje_cumplimiento.toFixed(1)}%
-                                            </Badge>
+                                            {row.porcentaje_cumplimiento === null ? (
+                                                <span className="text-slate-400 font-medium">-</span>
+                                            ) : (
+                                                <Badge className={`font-bold text-xs ${getCumplimientoColor(row.porcentaje_cumplimiento)}`}>
+                                                    {row.porcentaje_cumplimiento.toFixed(1)}%
+                                                </Badge>
+                                            )}
                                         </TableCell>
                                         <TableCell className="text-xs px-2 py-2 whitespace-nowrap text-center">
                                             <Badge 
