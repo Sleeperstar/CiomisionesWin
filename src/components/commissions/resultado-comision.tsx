@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { ArrowUpDown } from 'lucide-react';
+import { ArrowUpDown, Save, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/lib/supabase';
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -55,6 +55,7 @@ interface Totals {
 export default function ResultadoComision({ corte, zona, mes }: { corte: string; zona: string; mes: string }) {
     const [data, setData] = useState<ComisionResumen[]>([]);
     const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
     const { toast } = useToast();
     const [sortConfig, setSortConfig] = useState<{ key: keyof ComisionResumen; direction: 'ascending' | 'descending' } | null>(null);
     const [totals, setTotals] = useState<Totals | null>(null);
@@ -90,6 +91,80 @@ export default function ResultadoComision({ corte, zona, mes }: { corte: string;
 
     // Obtener número del corte seleccionado
     const corteNumber = getCorteNumber(corte);
+
+    // Función para guardar resultados en Supabase
+    const handleSaveResults = async () => {
+        if (data.length === 0) {
+            toast({
+                title: "Sin datos",
+                description: "No hay datos para guardar.",
+                variant: "destructive"
+            });
+            return;
+        }
+
+        setSaving(true);
+
+        try {
+            const monthNumber = monthMap[mes];
+            const year = 2025;
+            const periodo = (year * 100) + monthNumber;
+
+            // Preparar datos para inserción
+            const dataToSave = data.map(row => ({
+                periodo,
+                corte: corteNumber,
+                zona: zona.toUpperCase(),
+                ruc: row.ruc || '',
+                agencia: row.agencia || '',
+                meta: row.meta,
+                top: row.top || 'REGULAR',
+                altas: row.altas,
+                corte_1: row.corte_1,
+                corte_2: row.corte_2,
+                corte_3: row.corte_3,
+                corte_4: row.corte_4,
+                precio_sin_igv_promedio: row.precio_sin_igv_promedio,
+                porcentaje_cumplimiento: row.porcentaje_cumplimiento,
+                marcha_blanca: row.marcha_blanca,
+                bono_arpu: row.bono_arpu,
+                factor_multiplicador: row.factor_multiplicador,
+                multiplicador_final: row.multiplicador_final,
+                total_a_pagar: row.total_a_pagar
+            }));
+
+            // Insertar o actualizar (upsert)
+            const { error } = await supabase
+                .from('resultado_comisiones_guardado')
+                .upsert(dataToSave, {
+                    onConflict: 'periodo,corte,zona,ruc',
+                    ignoreDuplicates: false
+                });
+
+            if (error) {
+                throw new Error(`Error al guardar: ${error.message}`);
+            }
+
+            toast({
+                title: "✅ Resultados guardados",
+                description: `Se guardaron ${dataToSave.length} registros para ${mes.toUpperCase()} ${year} - Corte ${corteNumber} - ${zona.toUpperCase()}`,
+                duration: 5000
+            });
+
+            console.log(`[Resultado Comision] ✅ Guardados ${dataToSave.length} registros en resultado_comisiones_guardado`);
+
+        } catch (error: unknown) {
+            console.error(`Error guardando resultados:`, error);
+            const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
+            toast({
+                title: "Error al guardar",
+                description: errorMessage,
+                variant: "destructive"
+            });
+        } finally {
+            setSaving(false);
+        }
+    };
 
     useEffect(() => {
         const fetchData = async () => {
@@ -238,7 +313,7 @@ export default function ResultadoComision({ corte, zona, mes }: { corte: string;
                             {data.length} agencias • {mes.charAt(0).toUpperCase() + mes.slice(1)} 2025 • {zona.charAt(0).toUpperCase() + zona.slice(1)}
                         </CardDescription>
                     </div>
-                    <div className="flex flex-wrap gap-2">
+                    <div className="flex flex-wrap gap-2 items-center">
                         <Badge variant="secondary" className="bg-white/25 text-white border-white/40 px-3 py-1.5 font-semibold">
                             Altas: {totals?.totalAltas.toLocaleString('es-PE') || 0}
                         </Badge>
@@ -248,6 +323,23 @@ export default function ResultadoComision({ corte, zona, mes }: { corte: string;
                         <Badge variant="secondary" className="bg-green-500/80 text-white border-green-400/40 px-3 py-1.5 font-semibold">
                             Total a Pagar: S/ {totals?.totalPagar.toLocaleString('es-PE', { minimumFractionDigits: 2 }) || '0.00'}
                         </Badge>
+                        <Button
+                            onClick={handleSaveResults}
+                            disabled={saving || data.length === 0}
+                            className="bg-white text-[#f53c00] hover:bg-orange-50 font-semibold shadow-md transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            {saving ? (
+                                <>
+                                    <Icons.Spinner className="mr-2 h-4 w-4 animate-spin" />
+                                    Guardando...
+                                </>
+                            ) : (
+                                <>
+                                    <Save className="mr-2 h-4 w-4" />
+                                    Guardar Resultados
+                                </>
+                            )}
+                        </Button>
                     </div>
                 </div>
             </CardHeader>

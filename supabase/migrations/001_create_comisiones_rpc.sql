@@ -283,3 +283,88 @@ COMMENT ON FUNCTION get_comisiones_resumen(TEXT, INTEGER, INTEGER, INTEGER) IS
 - Bono ARPU: Si = multiplicador_final + 1
 - Total a Pagar usa multiplicador_final';
 
+-- ============================================================================
+-- TABLA: resultado_comisiones_guardado
+-- ============================================================================
+-- Almacena los resultados calculados de comisiones para cada periodo y corte
+-- Permite consultas históricas y auditoría
+
+CREATE TABLE IF NOT EXISTS resultado_comisiones_guardado (
+    id BIGSERIAL PRIMARY KEY,
+    
+    -- Identificadores del escenario
+    periodo INTEGER NOT NULL,  -- Formato YYYYMM (ej: 202504)
+    corte INTEGER NOT NULL,    -- 1, 2, 3 o 4
+    zona VARCHAR(50) NOT NULL, -- 'LIMA' o 'PROVINCIA'
+    
+    -- Datos de la agencia
+    ruc VARCHAR(20) NOT NULL,
+    agencia VARCHAR(255),
+    meta BIGINT,  -- NULL para marcha blanca
+    top VARCHAR(20),
+    
+    -- Resultados
+    altas BIGINT NOT NULL,
+    corte_1 BIGINT,
+    corte_2 BIGINT,
+    corte_3 BIGINT,
+    corte_4 BIGINT,
+    precio_sin_igv_promedio NUMERIC(10,2),
+    porcentaje_cumplimiento NUMERIC(5,2),  -- NULL para marcha blanca
+    
+    -- Bonificaciones
+    marcha_blanca VARCHAR(10) DEFAULT 'No',
+    bono_arpu VARCHAR(10) DEFAULT 'No',
+    
+    -- Multiplicadores
+    factor_multiplicador NUMERIC(4,1) NOT NULL,
+    multiplicador_final NUMERIC(4,1) NOT NULL,
+    
+    -- Total a pagar
+    total_a_pagar NUMERIC(12,2) NOT NULL,
+    
+    -- Auditoría
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    
+    -- Constraint único: Un RUC solo puede tener un resultado por periodo/corte/zona
+    UNIQUE(periodo, corte, zona, ruc)
+);
+
+-- Índices para consultas rápidas
+CREATE INDEX IF NOT EXISTS idx_resultado_periodo_corte_zona 
+    ON resultado_comisiones_guardado(periodo, corte, zona);
+
+CREATE INDEX IF NOT EXISTS idx_resultado_ruc 
+    ON resultado_comisiones_guardado(ruc);
+
+CREATE INDEX IF NOT EXISTS idx_resultado_created_at 
+    ON resultado_comisiones_guardado(created_at DESC);
+
+-- Trigger para actualizar updated_at automáticamente
+CREATE OR REPLACE FUNCTION update_resultado_comisiones_timestamp()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trigger_update_resultado_comisiones_timestamp ON resultado_comisiones_guardado;
+
+CREATE TRIGGER trigger_update_resultado_comisiones_timestamp
+    BEFORE UPDATE ON resultado_comisiones_guardado
+    FOR EACH ROW
+    EXECUTE FUNCTION update_resultado_comisiones_timestamp();
+
+-- Permisos
+GRANT SELECT, INSERT, UPDATE, DELETE ON resultado_comisiones_guardado TO authenticated;
+GRANT SELECT ON resultado_comisiones_guardado TO anon;
+GRANT USAGE, SELECT ON SEQUENCE resultado_comisiones_guardado_id_seq TO authenticated;
+
+-- Comentario
+COMMENT ON TABLE resultado_comisiones_guardado IS 
+'Almacena resultados calculados de comisiones por periodo, corte y zona. 
+Permite consultas históricas y auditoría.
+UNIQUE constraint: (periodo, corte, zona, ruc)';
+
