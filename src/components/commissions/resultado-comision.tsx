@@ -8,48 +8,47 @@ import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, Table
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { Icons } from "@/components/icons";
-import { SalesRecord } from '@/lib/schemas';
-import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
+import { Badge } from "@/components/ui/badge";
 
 const monthMap: { [key: string]: number } = {
     enero: 1, febrero: 2, marzo: 3, abril: 4, mayo: 5, junio: 6,
     julio: 7, agosto: 8, septiembre: 9, octubre: 10, noviembre: 11, diciembre: 12
 };
 
-// Define the structure for our aggregated data
-interface AggregatedResult {
-    RUC: string | null;
-    AGENCIA: string | null;
-    META: number;
-    TOP: string | null;
-    ALTAS: number;
-    PRECIO_SIN_IGV: number;
+// Estructura para los datos agregados desde Supabase RPC
+interface ComisionResumen {
+    ruc: string | null;
+    agencia: string | null;
+    meta: number;
+    top: string | null;
+    altas: number;
+    corte_1: number;
+    corte_2: number;
+    corte_3: number;
+    corte_4: number;
+    precio_sin_igv_promedio: number;
 }
 
-// Define types for processing
-interface PartialSalesRecord {
-    DNI_ASESOR: string | null;
-    ASESOR: string | null;
-    COD_PEDIDO: number | null; // Corrected type from string to number
-    PRECIO_CON_IGV_EXTERNO: number | null;
-}
-
-interface GroupedResult {
-    RUC: string | null;
-    AGENCIA: string | null;
-    pedidos: (number | null)[]; // Corrected type for the pedidos array
-    preciosSinIgv: number[];
+// Interfaz para los totales
+interface Totals {
+    totalAltas: number;
+    totalMeta: number;
+    totalCorte1: number;
+    totalCorte2: number;
+    totalCorte3: number;
+    totalCorte4: number;
+    avgPrecio: number;
 }
 
 export default function ResultadoComision({ corte, zona, mes }: { corte: string; zona: string; mes: string }) {
-    const [aggregatedData, setAggregatedData] = useState<AggregatedResult[]>([]);
+    const [data, setData] = useState<ComisionResumen[]>([]);
     const [loading, setLoading] = useState(true);
     const { toast } = useToast();
-    const [sortConfig, setSortConfig] = useState<{ key: keyof AggregatedResult; direction: 'ascending' | 'descending' } | null>(null);
-    const [totals, setTotals] = useState<{ totalAltas: number; totalMeta: number; avgPrecio: number } | null>(null);
+    const [sortConfig, setSortConfig] = useState<{ key: keyof ComisionResumen; direction: 'ascending' | 'descending' } | null>(null);
+    const [totals, setTotals] = useState<Totals | null>(null);
 
     const sortedData = useMemo(() => {
-        let sortableItems = [...aggregatedData];
+        let sortableItems = [...data];
         if (sortConfig !== null) {
             sortableItems.sort((a, b) => {
                 const aValue = a[sortConfig.key];
@@ -67,9 +66,9 @@ export default function ResultadoComision({ corte, zona, mes }: { corte: string;
             });
         }
         return sortableItems;
-    }, [aggregatedData, sortConfig]);
+    }, [data, sortConfig]);
 
-    const requestSort = (key: keyof AggregatedResult) => {
+    const requestSort = (key: keyof ComisionResumen) => {
         let direction: 'ascending' | 'descending' = 'ascending';
         if (sortConfig && sortConfig.key === key && sortConfig.direction === 'ascending') {
             direction = 'descending';
@@ -78,8 +77,8 @@ export default function ResultadoComision({ corte, zona, mes }: { corte: string;
     };
 
     useEffect(() => {
-        const fetchAndProcessData = async () => {
-            setAggregatedData([]);
+        const fetchData = async () => {
+            setData([]);
             setTotals(null);
             setLoading(true);
 
@@ -91,206 +90,259 @@ export default function ResultadoComision({ corte, zona, mes }: { corte: string;
             }
 
             const year = 2025;
-            const startDate = `${year}-${String(monthNumber).padStart(2, '0')}-01`;
-            const nextMonthDate = new Date(year, monthNumber, 1);
-            const endDate = nextMonthDate.toISOString().split('T')[0];
             const periodo = `${year}${String(monthNumber).padStart(2, '0')}`;
 
-            let query = supabase
-                .from('SalesRecord')
-                .select('*', { count: 'exact' }) // Match base-calculo to fetch all data
-                .not('FECHA_VALIDACION', 'is', null)
-                .gte('FECHA_INSTALADO', startDate)
-                .lt('FECHA_INSTALADO', endDate);
+            try {
+                // Llamar a la función RPC de Supabase que calcula todo en la BD
+                const { data: rpcData, error: rpcError } = await supabase.rpc('get_comisiones_resumen', {
+                    p_zona: zona,
+                    p_mes: monthNumber,
+                    p_year: year
+                });
 
-            if (zona === 'lima') {
-                query = query.eq('CANAL', 'Agencias');
-            }
-            
-                        // Fetch parameters data
-            const fetchParamsData = async () => {
-                const { data, error } = await supabase
+                if (rpcError) {
+                    throw new Error(`Error en RPC: ${rpcError.message}`);
+                }
+
+                // Obtener parámetros (META y TOP) de la tabla Parametros
+                const { data: paramsData, error: paramsError } = await supabase
                     .from('Parametros')
                     .select('RUC, META, TOP')
                     .eq('ZONA', zona.toUpperCase())
                     .eq('PERIODO', periodo);
 
-                if (error) throw new Error(`Error fetching parameters: ${error.message}`);
-                return data || [];
-            };
-
-            const fetchAllPaginatedData = async () => {
-                let allRecords: (Partial<SalesRecord>)[] = [];
-                let page = 0;
-                const pageSize = 1000;
-                let totalCount = 0;
-
-                while (true) {
-                    const from = page * pageSize;
-                    const to = from + pageSize - 1;
-
-                    const { data, error, count } = await query.range(from, to);
-
-                    if (error) throw error;
-                    if (data) allRecords = allRecords.concat(data);
-                    if (page === 0 && count) totalCount = count;
-
-                    if (!data || data.length < pageSize || (totalCount > 0 && allRecords.length >= totalCount)) {
-                        break;
-                    }
-                    
-                    page++;
+                if (paramsError) {
+                    throw new Error(`Error obteniendo parámetros: ${paramsError.message}`);
                 }
-                return { data: allRecords, count: totalCount };
-            };
 
-                        try {
-                // Fetch both datasets in parallel
-                const [salesData, paramsData] = await Promise.all([
-                    fetchAllPaginatedData(),
-                    fetchParamsData(),
-                ]);
+                // Crear mapa de parámetros por RUC
+                const paramsMap = new Map((paramsData || []).map(p => [p.RUC, { META: p.META || 0, TOP: p.TOP || 'N/A' }]));
 
-                const { data: records, count } = salesData;
-                console.log(`[Resultado Comision] Successfully fetched all ${records.length} of ${count} sales records.`);
-                console.log(`[Resultado Comision] Successfully fetched ${paramsData.length} parameter records.`);
-
-                // Create a map for quick lookup of parameters by RUC
-                const paramsMap = new Map(paramsData.map(p => [p.RUC, { META: p.META, TOP: p.TOP }]));
-
-                // Pivot table logic with explicit types
-                const groupedData = (records as PartialSalesRecord[]).reduce((acc: { [key: string]: GroupedResult }, record) => {
-                    const key = `${record.DNI_ASESOR}-${record.ASESOR}`;
-                    if (!acc[key]) {
-                        acc[key] = {
-                            RUC: record.DNI_ASESOR,
-                            AGENCIA: record.ASESOR,
-                            pedidos: [],
-                            preciosSinIgv: []
-                        };
-                    }
-                    acc[key].pedidos.push(record.COD_PEDIDO);
-                    if (record.PRECIO_CON_IGV_EXTERNO) {
-                        acc[key].preciosSinIgv.push(record.PRECIO_CON_IGV_EXTERNO / 1.18);
-                    }
-                    return acc;
-                }, {});
-
-                                const finalResult: AggregatedResult[] = Object.values(groupedData).map((group: GroupedResult) => {
-                    const params = paramsMap.get(group.RUC) || { META: 0, TOP: 'N/A' };
-                    const totalPrecios = group.preciosSinIgv.reduce((sum, p) => sum + p, 0);
-                    const avgPrecio = group.preciosSinIgv.length > 0 ? totalPrecios / group.preciosSinIgv.length : 0;
-                    
-                                        return {
-                        RUC: group.RUC,
-                        AGENCIA: group.AGENCIA,
-                        META: params.META,
-                        TOP: params.TOP,
-                        ALTAS: group.pedidos.length,
-                        PRECIO_SIN_IGV: avgPrecio
+                // Combinar datos de RPC con parámetros
+                const combinedData: ComisionResumen[] = (rpcData || []).map((row: {
+                    ruc: string | null;
+                    agencia: string | null;
+                    altas: number;
+                    corte_1: number;
+                    corte_2: number;
+                    corte_3: number;
+                    corte_4: number;
+                    precio_sin_igv_promedio: number;
+                }) => {
+                    const params = paramsMap.get(row.ruc) || { META: 0, TOP: 'N/A' };
+                    return {
+                        ruc: row.ruc,
+                        agencia: row.agencia,
+                        meta: params.META,
+                        top: params.TOP,
+                        altas: Number(row.altas) || 0,
+                        corte_1: Number(row.corte_1) || 0,
+                        corte_2: Number(row.corte_2) || 0,
+                        corte_3: Number(row.corte_3) || 0,
+                        corte_4: Number(row.corte_4) || 0,
+                        precio_sin_igv_promedio: Number(row.precio_sin_igv_promedio) || 0
                     };
                 });
 
-                                setAggregatedData(finalResult);
+                setData(combinedData);
 
-                                const totalAltas = finalResult.reduce((sum, row) => sum + row.ALTAS, 0);
-                const totalMeta = finalResult.reduce((sum, row) => sum + row.META, 0);
-                const allPreciosSinIgv = Object.values(groupedData).flatMap(g => g.preciosSinIgv);
-                const totalSumPrecios = allPreciosSinIgv.reduce((sum, p) => sum + p, 0);
-                const avgPrecio = allPreciosSinIgv.length > 0 ? totalSumPrecios / allPreciosSinIgv.length : 0;
-                setTotals({ totalAltas, totalMeta, avgPrecio });
+                // Calcular totales
+                const totalAltas = combinedData.reduce((sum, row) => sum + row.altas, 0);
+                const totalMeta = combinedData.reduce((sum, row) => sum + row.meta, 0);
+                const totalCorte1 = combinedData.reduce((sum, row) => sum + row.corte_1, 0);
+                const totalCorte2 = combinedData.reduce((sum, row) => sum + row.corte_2, 0);
+                const totalCorte3 = combinedData.reduce((sum, row) => sum + row.corte_3, 0);
+                const totalCorte4 = combinedData.reduce((sum, row) => sum + row.corte_4, 0);
+                const totalPrecio = combinedData.reduce((sum, row) => sum + row.precio_sin_igv_promedio, 0);
+                const avgPrecio = combinedData.length > 0 ? totalPrecio / combinedData.length : 0;
 
-            } catch (error: any) {
-                console.error(`Error fetching paginated SalesRecord:`, error);
-                toast({ title: "Error", description: `No se pudieron cargar los registros: ${error.message}`, variant: "destructive" });
+                setTotals({ totalAltas, totalMeta, totalCorte1, totalCorte2, totalCorte3, totalCorte4, avgPrecio });
+
+                console.log(`[Resultado Comision] Cargados ${combinedData.length} registros desde RPC`);
+
+            } catch (error: unknown) {
+                console.error(`Error fetching comisiones:`, error);
+                const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
+                toast({ title: "Error", description: `No se pudieron cargar los datos: ${errorMessage}`, variant: "destructive" });
             }
             
             setLoading(false);
         };
 
-        fetchAndProcessData();
+        fetchData();
     }, [corte, zona, mes, toast]);
 
 
+    // Componente para el botón de ordenar
+    const SortButton = ({ columnKey, children }: { columnKey: keyof ComisionResumen; children: React.ReactNode }) => (
+        <Button 
+            variant="ghost" 
+            onClick={() => requestSort(columnKey)}
+            className="text-slate-700 dark:text-slate-200 hover:text-[#f53c00] hover:bg-orange-100/50 font-bold px-2 h-auto py-1"
+        >
+            {children}
+            <ArrowUpDown className="ml-1 h-3 w-3" />
+        </Button>
+    );
+
     if (loading) {
-        return <div className="flex justify-center items-center h-64"><Icons.Spinner className="h-8 w-8 animate-spin" /></div>;
+        return (
+            <Card className="border-0 shadow-lg bg-gradient-to-br from-orange-50 to-amber-50 dark:from-slate-900 dark:to-slate-800">
+                <div className="flex justify-center items-center h-64">
+                    <div className="flex flex-col items-center gap-3">
+                        <Icons.Spinner className="h-10 w-10 animate-spin text-[#f53c00]" />
+                        <p className="text-sm text-muted-foreground animate-pulse">Calculando comisiones...</p>
+                    </div>
+                </div>
+            </Card>
+        );
     }
 
     return (
-        <Card>
-            <CardHeader>
-                <CardTitle>Resultado de Comisiones</CardTitle>
-                <CardDescription>
-                    Resultados finales agregados por agencia.
-                </CardDescription>
+        <Card className="border-0 shadow-lg bg-gradient-to-br from-white to-orange-50/30 dark:from-slate-900 dark:to-slate-800 overflow-hidden">
+            <CardHeader className="pb-4 border-b text-white rounded-t-lg" style={{ background: 'linear-gradient(135deg, #f53c00 0%, #ff8300 50%, #ffa700 100%)' }}>
+                <div className="flex items-center justify-between flex-wrap gap-4">
+                    <div>
+                        <CardTitle className="text-xl font-bold tracking-tight">Resultado de Comisiones</CardTitle>
+                        <CardDescription className="text-orange-100 mt-1">
+                            Resumen calculado por agencia • {data.length} agencias
+                        </CardDescription>
+                    </div>
+                    <div className="flex gap-3">
+                        <Badge variant="secondary" className="bg-white/25 text-white border-white/40 px-3 py-1.5 font-semibold">
+                            Total Altas: {totals?.totalAltas.toLocaleString('es-PE') || 0}
+                        </Badge>
+                        <Badge variant="secondary" className="bg-white/25 text-white border-white/40 px-3 py-1.5 font-semibold">
+                            Total Meta: {totals?.totalMeta.toLocaleString('es-PE') || 0}
+                        </Badge>
+                    </div>
+                </div>
             </CardHeader>
-            <CardContent>
-                 <ScrollArea className="whitespace-nowrap rounded-md border">
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead>
-                                    <Button variant="ghost" onClick={() => requestSort('RUC')}>
-                                        RUC
-                                        <ArrowUpDown className="ml-2 h-4 w-4" />
-                                    </Button>
+            <CardContent className="p-0 relative">
+                <div className="overflow-auto max-h-[500px] max-w-full">
+                    <Table className="relative">
+                        <TableHeader className="sticky top-0 bg-gradient-to-r from-orange-100 to-amber-100 dark:from-slate-800 dark:to-slate-700">
+                            <TableRow className="hover:bg-orange-100 dark:hover:bg-slate-800">
+                                <TableHead className="whitespace-nowrap px-3 py-2 border-b-2 border-[#f53c00]">
+                                    <SortButton columnKey="ruc">RUC</SortButton>
                                 </TableHead>
-                                                                <TableHead>
-                                    <Button variant="ghost" onClick={() => requestSort('AGENCIA')}>
-                                        AGENCIA
-                                        <ArrowUpDown className="ml-2 h-4 w-4" />
-                                    </Button>
+                                <TableHead className="whitespace-nowrap px-3 py-2 border-b-2 border-[#f53c00]">
+                                    <SortButton columnKey="agencia">AGENCIA</SortButton>
                                 </TableHead>
-                                <TableHead>
-                                     <Button variant="ghost" onClick={() => requestSort('META')}>
-                                        META
-                                        <ArrowUpDown className="ml-2 h-4 w-4" />
-                                    </Button>
+                                <TableHead className="whitespace-nowrap px-3 py-2 border-b-2 border-[#ff8300]">
+                                    <SortButton columnKey="meta">META</SortButton>
                                 </TableHead>
-                                                                <TableHead>
-                                     <Button variant="ghost" onClick={() => requestSort('TOP')}>
-                                        TOP
-                                        <ArrowUpDown className="ml-2 h-4 w-4" />
-                                    </Button>
+                                <TableHead className="whitespace-nowrap px-3 py-2 border-b-2 border-[#ff8300]">
+                                    <SortButton columnKey="top">TOP</SortButton>
                                 </TableHead>
-                                <TableHead>
-                                    <Button variant="ghost" onClick={() => requestSort('ALTAS')}>
-                                        ALTAS
-                                        <ArrowUpDown className="ml-2 h-4 w-4" />
-                                    </Button>
+                                <TableHead className="whitespace-nowrap px-3 py-2 border-b-2 border-[#ffa700]">
+                                    <SortButton columnKey="altas">ALTAS</SortButton>
                                 </TableHead>
-                                <TableHead>
-                                    <Button variant="ghost" onClick={() => requestSort('PRECIO_SIN_IGV')}>
-                                        PRECIO SIN IGV (Promedio)
-                                        <ArrowUpDown className="ml-2 h-4 w-4" />
-                                    </Button>
+                                <TableHead className="whitespace-nowrap px-3 py-2 border-b-2 border-[#f53c00]">
+                                    <SortButton columnKey="corte_1">CORTE 1</SortButton>
+                                </TableHead>
+                                <TableHead className="whitespace-nowrap px-3 py-2 border-b-2 border-[#ff8300]">
+                                    <SortButton columnKey="corte_2">CORTE 2</SortButton>
+                                </TableHead>
+                                <TableHead className="whitespace-nowrap px-3 py-2 border-b-2 border-[#ffa700]">
+                                    <SortButton columnKey="corte_3">CORTE 3</SortButton>
+                                </TableHead>
+                                <TableHead className="whitespace-nowrap px-3 py-2 border-b-2 border-[#f53c00]">
+                                    <SortButton columnKey="corte_4">CORTE 4</SortButton>
+                                </TableHead>
+                                <TableHead className="whitespace-nowrap px-3 py-2 border-b-2 border-[#ffa700]">
+                                    <SortButton columnKey="precio_sin_igv_promedio">PRECIO S/IGV</SortButton>
                                 </TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {sortedData.map((row, index) => (
-                                <TableRow key={index}>
-                                    <TableCell>{row.RUC}</TableCell>
-                                                                         <TableCell>{row.AGENCIA}</TableCell>
-                                     <TableCell>{row.META}</TableCell>
-                                                                          <TableCell>{row.TOP}</TableCell>
-                                    <TableCell>{row.ALTAS}</TableCell>
-                                    <TableCell>{row.PRECIO_SIN_IGV.toFixed(2)}</TableCell>
+                            {sortedData.length === 0 ? (
+                                <TableRow>
+                                    <TableCell colSpan={10} className="text-center py-12 text-muted-foreground">
+                                        <div className="flex flex-col items-center gap-2">
+                                            <svg className="h-12 w-12 text-orange-200" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                            </svg>
+                                            <span>No se encontraron datos de comisiones</span>
+                                        </div>
+                                    </TableCell>
                                 </TableRow>
-                            ))}
+                            ) : (
+                                sortedData.map((row, index) => (
+                                    <TableRow 
+                                        key={row.ruc || index}
+                                        className={`
+                                            transition-colors duration-150
+                                            ${index % 2 === 0 ? 'bg-white dark:bg-slate-900' : 'bg-orange-50/40 dark:bg-slate-800/50'}
+                                            hover:bg-orange-100/60 dark:hover:bg-orange-900/20
+                                        `}
+                                    >
+                                        <TableCell className="font-mono text-sm px-3 py-2.5 whitespace-nowrap">{row.ruc}</TableCell>
+                                        <TableCell className="text-sm px-3 py-2.5 whitespace-nowrap max-w-[200px] truncate font-medium" title={row.agencia || ''}>
+                                            {row.agencia}
+                                        </TableCell>
+                                        <TableCell className="text-sm px-3 py-2.5 whitespace-nowrap text-center">
+                                            <Badge variant="outline" className="border-[#ff8300] text-[#f53c00] font-semibold">
+                                                {row.meta}
+                                            </Badge>
+                                        </TableCell>
+                                        <TableCell className="text-sm px-3 py-2.5 whitespace-nowrap text-center">
+                                            <Badge 
+                                                variant="secondary" 
+                                                className={`font-semibold ${
+                                                    row.top === 'SI' 
+                                                        ? 'bg-[#ffa700]/20 text-[#f53c00] border border-[#ffa700]' 
+                                                        : 'bg-slate-100 text-slate-500'
+                                                }`}
+                                            >
+                                                {row.top}
+                                            </Badge>
+                                        </TableCell>
+                                        <TableCell className="text-sm px-3 py-2.5 whitespace-nowrap text-center">
+                                            <span className="font-bold text-[#f53c00] text-lg">{row.altas}</span>
+                                        </TableCell>
+                                        <TableCell className="text-sm px-3 py-2.5 whitespace-nowrap text-center font-medium">
+                                            {row.corte_1}
+                                        </TableCell>
+                                        <TableCell className="text-sm px-3 py-2.5 whitespace-nowrap text-center font-medium">
+                                            {row.corte_2}
+                                        </TableCell>
+                                        <TableCell className="text-sm px-3 py-2.5 whitespace-nowrap text-center font-medium">
+                                            {row.corte_3}
+                                        </TableCell>
+                                        <TableCell className="text-sm px-3 py-2.5 whitespace-nowrap text-center font-medium">
+                                            {row.corte_4}
+                                        </TableCell>
+                                        <TableCell className="text-sm px-3 py-2.5 whitespace-nowrap text-right font-mono">
+                                            S/ {row.precio_sin_igv_promedio.toFixed(2)}
+                                        </TableCell>
+                                    </TableRow>
+                                ))
+                            )}
                         </TableBody>
-                                                <TableFooter>
-                            <TableRow>
-                                <TableCell colSpan={2} className="font-bold text-right">TOTALES</TableCell>
-                                <TableCell className="font-bold">{totals?.totalMeta}</TableCell>
-                                                                <TableCell></TableCell> {/* Empty cell for TOP */}
-                                <TableCell className="font-bold">{totals?.totalAltas}</TableCell>
-                                <TableCell className="font-bold">{totals?.avgPrecio.toFixed(2)}</TableCell>
+                        <TableFooter className="sticky bottom-0 bg-gradient-to-r from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-700">
+                            <TableRow className="font-bold">
+                                <TableCell colSpan={2} className="text-right px-3 py-3 text-slate-700 dark:text-slate-200">
+                                    TOTALES
+                                </TableCell>
+                                <TableCell className="text-center px-3 py-3">
+                                    <Badge className="bg-[#f53c00] text-white">{totals?.totalMeta}</Badge>
+                                </TableCell>
+                                <TableCell></TableCell>
+                                <TableCell className="text-center px-3 py-3">
+                                    <Badge className="bg-[#f53c00] text-white text-lg px-3">{totals?.totalAltas}</Badge>
+                                </TableCell>
+                                <TableCell className="text-center px-3 py-3 text-slate-700 dark:text-slate-200">{totals?.totalCorte1}</TableCell>
+                                <TableCell className="text-center px-3 py-3 text-slate-700 dark:text-slate-200">{totals?.totalCorte2}</TableCell>
+                                <TableCell className="text-center px-3 py-3 text-slate-700 dark:text-slate-200">{totals?.totalCorte3}</TableCell>
+                                <TableCell className="text-center px-3 py-3 text-slate-700 dark:text-slate-200">{totals?.totalCorte4}</TableCell>
+                                <TableCell className="text-right px-3 py-3 font-mono text-slate-700 dark:text-slate-200">
+                                    S/ {totals?.avgPrecio.toFixed(2)}
+                                </TableCell>
                             </TableRow>
                         </TableFooter>
                     </Table>
-                    <ScrollBar orientation="horizontal" />
-                </ScrollArea>
+                </div>
             </CardContent>
         </Card>
     );
