@@ -11,6 +11,7 @@ import {
   BarChart, 
   Save,     
   Loader,
+  MessageSquare,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -21,6 +22,7 @@ export const Icons = {
   Agencies: Building2,
   UploadSales: UploadCloud,
   SmartValidation: ShieldCheck,
+  ChatBot: MessageSquare,
   Settings: Settings,
   Analytics: BarChart,
   Save: Save,
