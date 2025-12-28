@@ -33,13 +33,15 @@ Esta guía te explica paso a paso cómo crear la función `get_comisiones_resume
 
 ```sql
 -- ============================================================================
--- FUNCIÓN RPC: get_comisiones_resumen
+-- FUNCIÓN RPC: get_comisiones_resumen (VERSIÓN OPTIMIZADA)
 -- ============================================================================
+-- Incluye JOIN con la tabla Parametros para obtener META y TOP
+-- en una sola consulta optimizada.
 
 -- Primero eliminar la función si existe (para poder recrearla)
 DROP FUNCTION IF EXISTS get_comisiones_resumen(TEXT, INTEGER, INTEGER);
 
--- Crear la función RPC
+-- Crear la función RPC optimizada con JOIN a Parametros
 CREATE OR REPLACE FUNCTION get_comisiones_resumen(
     p_zona TEXT,
     p_mes INTEGER,
@@ -48,6 +50,8 @@ CREATE OR REPLACE FUNCTION get_comisiones_resumen(
 RETURNS TABLE (
     ruc TEXT,
     agencia TEXT,
+    meta INTEGER,
+    top TEXT,
     altas BIGINT,
     corte_1 BIGINT,
     corte_2 BIGINT,
@@ -61,32 +65,56 @@ AS $$
 DECLARE
     start_date DATE;
     end_date DATE;
+    v_periodo TEXT;
 BEGIN
     -- Calcular el rango de fechas del mes
     start_date := make_date(p_year, p_mes, 1);
     end_date := start_date + INTERVAL '1 month';
     
+    -- Calcular el periodo en formato YYYYMM para buscar en Parametros
+    v_periodo := p_year::TEXT || LPAD(p_mes::TEXT, 2, '0');
+    
     RETURN QUERY
     SELECT 
-        sr."DNI_ASESOR"::TEXT as ruc,
-        sr."ASESOR"::TEXT as agencia,
-        COUNT(*)::BIGINT as altas,
-        COUNT(*) FILTER (WHERE sr."CORTE_1" = 1)::BIGINT as corte_1,
-        COUNT(*) FILTER (WHERE sr."CORTE_2" = 1)::BIGINT as corte_2,
-        COUNT(*) FILTER (WHERE sr."CORTE_3" = 1)::BIGINT as corte_3,
-        COUNT(*) FILTER (WHERE sr."CORTE_4" = 1)::BIGINT as corte_4,
-        COALESCE(AVG(sr."PRECIO_CON_IGV_EXTERNO" / 1.18), 0)::NUMERIC as precio_sin_igv_promedio
-    FROM "SalesRecord" sr
-    WHERE 
-        sr."FECHA_VALIDACION" IS NOT NULL
-        AND sr."FECHA_INSTALADO" >= start_date
-        AND sr."FECHA_INSTALADO" < end_date
-        AND (
-            LOWER(p_zona) = 'provincia' 
-            OR sr."CANAL" = 'Agencias'
-        )
-    GROUP BY sr."DNI_ASESOR", sr."ASESOR"
-    ORDER BY altas DESC;
+        ventas.ruc,
+        ventas.agencia,
+        -- META y TOP desde la tabla Parametros (LEFT JOIN)
+        COALESCE(p."META", 0)::INTEGER as meta,
+        COALESCE(p."TOP", 'N/A')::TEXT as top,
+        ventas.altas,
+        ventas.corte_1,
+        ventas.corte_2,
+        ventas.corte_3,
+        ventas.corte_4,
+        ventas.precio_sin_igv_promedio
+    FROM (
+        -- Subconsulta: Agregar ventas por agencia
+        SELECT 
+            sr."DNI_ASESOR"::TEXT as ruc,
+            sr."ASESOR"::TEXT as agencia,
+            COUNT(*)::BIGINT as altas,
+            COUNT(*) FILTER (WHERE sr."CORTE_1" = 1)::BIGINT as corte_1,
+            COUNT(*) FILTER (WHERE sr."CORTE_2" = 1)::BIGINT as corte_2,
+            COUNT(*) FILTER (WHERE sr."CORTE_3" = 1)::BIGINT as corte_3,
+            COUNT(*) FILTER (WHERE sr."CORTE_4" = 1)::BIGINT as corte_4,
+            COALESCE(AVG(sr."PRECIO_CON_IGV_EXTERNO" / 1.18), 0)::NUMERIC as precio_sin_igv_promedio
+        FROM "SalesRecord" sr
+        WHERE 
+            sr."FECHA_VALIDACION" IS NOT NULL
+            AND sr."FECHA_INSTALADO" >= start_date
+            AND sr."FECHA_INSTALADO" < end_date
+            AND (
+                LOWER(p_zona) = 'provincia' 
+                OR sr."CANAL" = 'Agencias'
+            )
+        GROUP BY sr."DNI_ASESOR", sr."ASESOR"
+    ) ventas
+    -- LEFT JOIN con Parametros para obtener META y TOP
+    LEFT JOIN "Parametros" p ON 
+        p."RUC" = ventas.ruc 
+        AND p."PERIODO" = v_periodo
+        AND UPPER(p."ZONA") = UPPER(p_zona)
+    ORDER BY ventas.altas DESC;
 END;
 $$;
 
@@ -110,7 +138,7 @@ Para verificar que la función se creó correctamente, ejecuta esta consulta de 
 SELECT * FROM get_comisiones_resumen('lima', 8, 2025);
 ```
 
-Deberías ver una tabla con columnas: `ruc`, `agencia`, `altas`, `corte_1`, `corte_2`, `corte_3`, `corte_4`, `precio_sin_igv_promedio`
+Deberías ver una tabla con columnas: `ruc`, `agencia`, `meta`, `top`, `altas`, `corte_1`, `corte_2`, `corte_3`, `corte_4`, `precio_sin_igv_promedio`
 
 ---
 
@@ -159,16 +187,27 @@ La función aplica estos filtros automáticamente:
 | 3 | `FECHA_INSTALADO` | < primer día del mes siguiente |
 | 4 | `CANAL` | = 'Agencias' **(solo si zona = 'lima')** |
 
-### Campos calculados:
+### Campos devueltos:
 
-| Campo | Cálculo |
-|-------|---------|
-| `altas` | `COUNT(*)` - Total de registros que cumplen los filtros |
-| `corte_1` | `COUNT(*) WHERE CORTE_1 = 1` |
-| `corte_2` | `COUNT(*) WHERE CORTE_2 = 1` |
-| `corte_3` | `COUNT(*) WHERE CORTE_3 = 1` |
-| `corte_4` | `COUNT(*) WHERE CORTE_4 = 1` |
-| `precio_sin_igv_promedio` | `AVG(PRECIO_CON_IGV_EXTERNO / 1.18)` |
+| Campo | Origen | Descripción |
+|-------|--------|-------------|
+| `ruc` | SalesRecord.DNI_ASESOR | RUC de la agencia |
+| `agencia` | SalesRecord.ASESOR | Nombre de la agencia |
+| `meta` | Parametros.META | Meta de ventas (JOIN) |
+| `top` | Parametros.TOP | Si es agencia TOP (JOIN) |
+| `altas` | `COUNT(*)` | Total de registros válidos |
+| `corte_1` | `COUNT(*) WHERE CORTE_1 = 1` | Registros en corte 1 |
+| `corte_2` | `COUNT(*) WHERE CORTE_2 = 1` | Registros en corte 2 |
+| `corte_3` | `COUNT(*) WHERE CORTE_3 = 1` | Registros en corte 3 |
+| `corte_4` | `COUNT(*) WHERE CORTE_4 = 1` | Registros en corte 4 |
+| `precio_sin_igv_promedio` | `AVG(PRECIO/1.18)` | Precio promedio sin IGV |
+
+### Ventajas de esta función optimizada:
+
+1. **UNA sola consulta** - Incluye JOIN con Parametros
+2. **Todo se calcula en la BD** - No hay procesamiento en el frontend
+3. **Menos datos transferidos** - Solo el resumen final
+4. **Más rápido** - PostgreSQL es muy eficiente en agregaciones
 
 ---
 

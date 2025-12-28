@@ -90,10 +90,10 @@ export default function ResultadoComision({ corte, zona, mes }: { corte: string;
             }
 
             const year = 2025;
-            const periodo = `${year}${String(monthNumber).padStart(2, '0')}`;
 
             try {
-                // Llamar a la función RPC de Supabase que calcula todo en la BD
+                // UNA SOLA CONSULTA: La función RPC incluye JOIN con Parametros
+                // Trae: ruc, agencia, meta, top, altas, corte_1-4, precio_sin_igv_promedio
                 const { data: rpcData, error: rpcError } = await supabase.rpc('get_comisiones_resumen', {
                     p_zona: zona,
                     p_mes: monthNumber,
@@ -104,61 +104,35 @@ export default function ResultadoComision({ corte, zona, mes }: { corte: string;
                     throw new Error(`Error en RPC: ${rpcError.message}`);
                 }
 
-                // Obtener parámetros (META y TOP) de la tabla Parametros
-                const { data: paramsData, error: paramsError } = await supabase
-                    .from('Parametros')
-                    .select('RUC, META, TOP')
-                    .eq('ZONA', zona.toUpperCase())
-                    .eq('PERIODO', periodo);
+                // Mapear los datos directamente (ya vienen completos desde la BD)
+                const processedData: ComisionResumen[] = (rpcData || []).map((row: ComisionResumen) => ({
+                    ruc: row.ruc,
+                    agencia: row.agencia,
+                    meta: Number(row.meta) || 0,
+                    top: row.top || 'N/A',
+                    altas: Number(row.altas) || 0,
+                    corte_1: Number(row.corte_1) || 0,
+                    corte_2: Number(row.corte_2) || 0,
+                    corte_3: Number(row.corte_3) || 0,
+                    corte_4: Number(row.corte_4) || 0,
+                    precio_sin_igv_promedio: Number(row.precio_sin_igv_promedio) || 0
+                }));
 
-                if (paramsError) {
-                    throw new Error(`Error obteniendo parámetros: ${paramsError.message}`);
-                }
-
-                // Crear mapa de parámetros por RUC
-                const paramsMap = new Map((paramsData || []).map(p => [p.RUC, { META: p.META || 0, TOP: p.TOP || 'N/A' }]));
-
-                // Combinar datos de RPC con parámetros
-                const combinedData: ComisionResumen[] = (rpcData || []).map((row: {
-                    ruc: string | null;
-                    agencia: string | null;
-                    altas: number;
-                    corte_1: number;
-                    corte_2: number;
-                    corte_3: number;
-                    corte_4: number;
-                    precio_sin_igv_promedio: number;
-                }) => {
-                    const params = paramsMap.get(row.ruc) || { META: 0, TOP: 'N/A' };
-                    return {
-                        ruc: row.ruc,
-                        agencia: row.agencia,
-                        meta: params.META,
-                        top: params.TOP,
-                        altas: Number(row.altas) || 0,
-                        corte_1: Number(row.corte_1) || 0,
-                        corte_2: Number(row.corte_2) || 0,
-                        corte_3: Number(row.corte_3) || 0,
-                        corte_4: Number(row.corte_4) || 0,
-                        precio_sin_igv_promedio: Number(row.precio_sin_igv_promedio) || 0
-                    };
-                });
-
-                setData(combinedData);
+                setData(processedData);
 
                 // Calcular totales
-                const totalAltas = combinedData.reduce((sum, row) => sum + row.altas, 0);
-                const totalMeta = combinedData.reduce((sum, row) => sum + row.meta, 0);
-                const totalCorte1 = combinedData.reduce((sum, row) => sum + row.corte_1, 0);
-                const totalCorte2 = combinedData.reduce((sum, row) => sum + row.corte_2, 0);
-                const totalCorte3 = combinedData.reduce((sum, row) => sum + row.corte_3, 0);
-                const totalCorte4 = combinedData.reduce((sum, row) => sum + row.corte_4, 0);
-                const totalPrecio = combinedData.reduce((sum, row) => sum + row.precio_sin_igv_promedio, 0);
-                const avgPrecio = combinedData.length > 0 ? totalPrecio / combinedData.length : 0;
+                const totalAltas = processedData.reduce((sum, row) => sum + row.altas, 0);
+                const totalMeta = processedData.reduce((sum, row) => sum + row.meta, 0);
+                const totalCorte1 = processedData.reduce((sum, row) => sum + row.corte_1, 0);
+                const totalCorte2 = processedData.reduce((sum, row) => sum + row.corte_2, 0);
+                const totalCorte3 = processedData.reduce((sum, row) => sum + row.corte_3, 0);
+                const totalCorte4 = processedData.reduce((sum, row) => sum + row.corte_4, 0);
+                const totalPrecio = processedData.reduce((sum, row) => sum + row.precio_sin_igv_promedio, 0);
+                const avgPrecio = processedData.length > 0 ? totalPrecio / processedData.length : 0;
 
                 setTotals({ totalAltas, totalMeta, totalCorte1, totalCorte2, totalCorte3, totalCorte4, avgPrecio });
 
-                console.log(`[Resultado Comision] Cargados ${combinedData.length} registros desde RPC`);
+                console.log(`[Resultado Comision] ✅ Cargados ${processedData.length} registros en UNA sola consulta RPC`);
 
             } catch (error: unknown) {
                 console.error(`Error fetching comisiones:`, error);
