@@ -33,9 +33,12 @@ interface ComisionResumen {
     corte_3: number;
     corte_4: number;
     precio_sin_igv_promedio: number;
-    // Nuevos campos calculados
+    // Campos calculados
     porcentaje_cumplimiento: number;
+    marcha_blanca: string;
+    bono_arpu: string;
     factor_multiplicador: number;
+    multiplicador_final: number;
     total_a_pagar: number;
 }
 
@@ -129,7 +132,10 @@ export default function ResultadoComision({ corte, zona, mes }: { corte: string;
                     corte_4: Number(row.corte_4) || 0,
                     precio_sin_igv_promedio: Number(row.precio_sin_igv_promedio) || 0,
                     porcentaje_cumplimiento: Number(row.porcentaje_cumplimiento) || 0,
+                    marcha_blanca: row.marcha_blanca || 'No',
+                    bono_arpu: row.bono_arpu || 'No',
                     factor_multiplicador: Number(row.factor_multiplicador) || 1.3,
+                    multiplicador_final: Number(row.multiplicador_final) || Number(row.factor_multiplicador) || 1.3,
                     total_a_pagar: Number(row.total_a_pagar) || 0
                 }));
 
@@ -248,34 +254,43 @@ export default function ResultadoComision({ corte, zona, mes }: { corte: string;
                     <Table className="relative">
                         <TableHeader className="sticky top-0 bg-gradient-to-r from-orange-100 to-amber-100 dark:from-slate-800 dark:to-slate-700">
                             <TableRow className="hover:bg-orange-100 dark:hover:bg-slate-800">
-                                <TableHead className="whitespace-nowrap px-3 py-2 border-b-2 border-[#f53c00]">
+                                <TableHead className="whitespace-nowrap px-2 py-2 border-b-2 border-[#f53c00]">
                                     <SortButton columnKey="ruc">RUC</SortButton>
                                 </TableHead>
-                                <TableHead className="whitespace-nowrap px-3 py-2 border-b-2 border-[#f53c00]">
+                                <TableHead className="whitespace-nowrap px-2 py-2 border-b-2 border-[#f53c00]">
                                     <SortButton columnKey="agencia">AGENCIA</SortButton>
                                 </TableHead>
-                                <TableHead className="whitespace-nowrap px-3 py-2 border-b-2 border-[#ff8300]">
+                                <TableHead className="whitespace-nowrap px-2 py-2 border-b-2 border-[#ff8300]">
                                     <SortButton columnKey="meta">META</SortButton>
                                 </TableHead>
-                                <TableHead className="whitespace-nowrap px-3 py-2 border-b-2 border-[#ff8300]">
+                                <TableHead className="whitespace-nowrap px-2 py-2 border-b-2 border-[#ff8300]">
                                     <SortButton columnKey="top">TOP</SortButton>
                                 </TableHead>
-                                <TableHead className="whitespace-nowrap px-3 py-2 border-b-2 border-[#ffa700]">
+                                <TableHead className="whitespace-nowrap px-2 py-2 border-b-2 border-[#ffa700]">
                                     <SortButton columnKey="altas">ALTAS</SortButton>
                                 </TableHead>
-                                <TableHead className="whitespace-nowrap px-3 py-2 border-b-2 border-[#f53c00]">
+                                <TableHead className="whitespace-nowrap px-2 py-2 border-b-2 border-[#f53c00]">
                                     <SortButton columnKey="porcentaje_cumplimiento">% CUMPL.</SortButton>
                                 </TableHead>
-                                <TableHead className="whitespace-nowrap px-3 py-2 border-b-2 border-[#ff8300]">
+                                <TableHead className="whitespace-nowrap px-2 py-2 border-b-2 border-[#ff8300] text-center text-xs font-bold text-slate-600">
+                                    M.BLANCA
+                                </TableHead>
+                                <TableHead className="whitespace-nowrap px-2 py-2 border-b-2 border-[#ffa700] text-center text-xs font-bold text-slate-600">
+                                    BONO ARPU
+                                </TableHead>
+                                <TableHead className="whitespace-nowrap px-2 py-2 border-b-2 border-[#f53c00]">
                                     <SortButton columnKey="factor_multiplicador">FACTOR</SortButton>
                                 </TableHead>
-                                <TableHead className="whitespace-nowrap px-3 py-2 border-b-2 border-[#ffa700]">
+                                <TableHead className="whitespace-nowrap px-2 py-2 border-b-2 border-[#ff8300]">
+                                    <SortButton columnKey="multiplicador_final">MULT. FINAL</SortButton>
+                                </TableHead>
+                                <TableHead className="whitespace-nowrap px-2 py-2 border-b-2 border-[#ffa700]">
                                     <SortButton columnKey={`corte_${corteNumber}` as keyof ComisionResumen}>CORTE {corteNumber}</SortButton>
                                 </TableHead>
-                                <TableHead className="whitespace-nowrap px-3 py-2 border-b-2 border-[#f53c00]">
+                                <TableHead className="whitespace-nowrap px-2 py-2 border-b-2 border-[#f53c00]">
                                     <SortButton columnKey="precio_sin_igv_promedio">PRECIO S/IGV</SortButton>
                                 </TableHead>
-                                <TableHead className="whitespace-nowrap px-3 py-2 border-b-2 border-[#ffa700]">
+                                <TableHead className="whitespace-nowrap px-2 py-2 border-b-2 border-[#ffa700]">
                                     <SortButton columnKey="total_a_pagar">TOTAL PAGAR</SortButton>
                                 </TableHead>
                             </TableRow>
@@ -283,7 +298,7 @@ export default function ResultadoComision({ corte, zona, mes }: { corte: string;
                         <TableBody>
                             {sortedData.length === 0 ? (
                                 <TableRow>
-                                    <TableCell colSpan={10} className="text-center py-12 text-muted-foreground">
+                                    <TableCell colSpan={13} className="text-center py-12 text-muted-foreground">
                                         <div className="flex flex-col items-center gap-2">
                                             <svg className="h-12 w-12 text-orange-200" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -302,19 +317,19 @@ export default function ResultadoComision({ corte, zona, mes }: { corte: string;
                                             hover:bg-orange-100/60 dark:hover:bg-orange-900/20
                                         `}
                                     >
-                                        <TableCell className="font-mono text-sm px-3 py-2.5 whitespace-nowrap">{row.ruc}</TableCell>
-                                        <TableCell className="text-sm px-3 py-2.5 whitespace-nowrap max-w-[180px] truncate font-medium" title={row.agencia || ''}>
+                                        <TableCell className="font-mono text-xs px-2 py-2 whitespace-nowrap">{row.ruc}</TableCell>
+                                        <TableCell className="text-xs px-2 py-2 whitespace-nowrap max-w-[150px] truncate font-medium" title={row.agencia || ''}>
                                             {row.agencia}
                                         </TableCell>
-                                        <TableCell className="text-sm px-3 py-2.5 whitespace-nowrap text-center">
-                                            <Badge variant="outline" className="border-[#ff8300] text-[#f53c00] font-semibold">
+                                        <TableCell className="text-xs px-2 py-2 whitespace-nowrap text-center">
+                                            <Badge variant="outline" className="border-[#ff8300] text-[#f53c00] font-semibold text-xs">
                                                 {row.meta}
                                             </Badge>
                                         </TableCell>
-                                        <TableCell className="text-sm px-3 py-2.5 whitespace-nowrap text-center">
+                                        <TableCell className="text-xs px-2 py-2 whitespace-nowrap text-center">
                                             <Badge 
                                                 variant="secondary" 
-                                                className={`font-semibold ${
+                                                className={`font-semibold text-xs ${
                                                     row.top === 'GOLD' 
                                                         ? 'bg-yellow-400/30 text-yellow-700 border border-yellow-500'
                                                         : row.top === 'SILVER'
@@ -325,24 +340,53 @@ export default function ResultadoComision({ corte, zona, mes }: { corte: string;
                                                 {row.top}
                                             </Badge>
                                         </TableCell>
-                                        <TableCell className="text-sm px-3 py-2.5 whitespace-nowrap text-center">
-                                            <span className="font-bold text-[#f53c00] text-lg">{row.altas}</span>
+                                        <TableCell className="text-sm px-2 py-2 whitespace-nowrap text-center">
+                                            <span className="font-bold text-[#f53c00]">{row.altas}</span>
                                         </TableCell>
-                                        <TableCell className="text-sm px-3 py-2.5 whitespace-nowrap text-center">
-                                            <Badge className={`font-bold ${getCumplimientoColor(row.porcentaje_cumplimiento)}`}>
+                                        <TableCell className="text-xs px-2 py-2 whitespace-nowrap text-center">
+                                            <Badge className={`font-bold text-xs ${getCumplimientoColor(row.porcentaje_cumplimiento)}`}>
                                                 {row.porcentaje_cumplimiento.toFixed(1)}%
                                             </Badge>
                                         </TableCell>
-                                        <TableCell className="text-sm px-3 py-2.5 whitespace-nowrap text-center font-bold text-[#ff8300]">
+                                        <TableCell className="text-xs px-2 py-2 whitespace-nowrap text-center">
+                                            <Badge 
+                                                variant="secondary"
+                                                className={`text-xs ${
+                                                    row.marcha_blanca.toUpperCase() === 'SÍ' || row.marcha_blanca.toUpperCase() === 'SI'
+                                                        ? 'bg-purple-100 text-purple-700 border border-purple-400'
+                                                        : 'bg-slate-100 text-slate-400'
+                                                }`}
+                                            >
+                                                {row.marcha_blanca}
+                                            </Badge>
+                                        </TableCell>
+                                        <TableCell className="text-xs px-2 py-2 whitespace-nowrap text-center">
+                                            <Badge 
+                                                variant="secondary"
+                                                className={`text-xs ${
+                                                    row.bono_arpu.toUpperCase() === 'SÍ' || row.bono_arpu.toUpperCase() === 'SI'
+                                                        ? 'bg-blue-100 text-blue-700 border border-blue-400'
+                                                        : 'bg-slate-100 text-slate-400'
+                                                }`}
+                                            >
+                                                {row.bono_arpu}
+                                            </Badge>
+                                        </TableCell>
+                                        <TableCell className="text-xs px-2 py-2 whitespace-nowrap text-center font-bold text-[#ff8300]">
                                             x{row.factor_multiplicador.toFixed(1)}
                                         </TableCell>
-                                        <TableCell className="text-sm px-3 py-2.5 whitespace-nowrap text-center font-medium">
+                                        <TableCell className="text-xs px-2 py-2 whitespace-nowrap text-center">
+                                            <span className={`font-bold ${row.multiplicador_final > row.factor_multiplicador ? 'text-green-600' : 'text-slate-600'}`}>
+                                                x{row.multiplicador_final.toFixed(1)}
+                                            </span>
+                                        </TableCell>
+                                        <TableCell className="text-sm px-2 py-2 whitespace-nowrap text-center font-medium">
                                             {getCorteValue(row)}
                                         </TableCell>
-                                        <TableCell className="text-sm px-3 py-2.5 whitespace-nowrap text-right font-mono">
+                                        <TableCell className="text-xs px-2 py-2 whitespace-nowrap text-right font-mono">
                                             S/ {row.precio_sin_igv_promedio.toFixed(2)}
                                         </TableCell>
-                                        <TableCell className="text-sm px-3 py-2.5 whitespace-nowrap text-right">
+                                        <TableCell className="text-xs px-2 py-2 whitespace-nowrap text-right">
                                             <span className="font-bold text-green-600 dark:text-green-400">
                                                 S/ {row.total_a_pagar.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
                                             </span>
@@ -353,28 +397,31 @@ export default function ResultadoComision({ corte, zona, mes }: { corte: string;
                         </TableBody>
                         <TableFooter className="sticky bottom-0 bg-gradient-to-r from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-700">
                             <TableRow className="font-bold">
-                                <TableCell colSpan={2} className="text-right px-3 py-3 text-slate-700 dark:text-slate-200">
+                                <TableCell colSpan={2} className="text-right px-2 py-2 text-slate-700 dark:text-slate-200 text-xs">
                                     TOTALES
                                 </TableCell>
-                                <TableCell className="text-center px-3 py-3">
-                                    <Badge className="bg-[#f53c00] text-white">{totals?.totalMeta}</Badge>
+                                <TableCell className="text-center px-2 py-2">
+                                    <Badge className="bg-[#f53c00] text-white text-xs">{totals?.totalMeta}</Badge>
                                 </TableCell>
                                 <TableCell></TableCell>
-                                <TableCell className="text-center px-3 py-3">
-                                    <Badge className="bg-[#f53c00] text-white text-lg px-3">{totals?.totalAltas}</Badge>
+                                <TableCell className="text-center px-2 py-2">
+                                    <Badge className="bg-[#f53c00] text-white px-2">{totals?.totalAltas}</Badge>
                                 </TableCell>
-                                <TableCell className="text-center px-3 py-3 text-slate-700 dark:text-slate-200">
+                                <TableCell className="text-center px-2 py-2 text-slate-700 dark:text-slate-200 text-xs">
                                     {totals?.avgCumplimiento.toFixed(1)}%
                                 </TableCell>
-                                <TableCell className="text-center px-3 py-3 text-slate-500">-</TableCell>
-                                <TableCell className="text-center px-3 py-3 text-slate-700 dark:text-slate-200">
+                                <TableCell className="text-center px-2 py-2 text-slate-400 text-xs">-</TableCell>
+                                <TableCell className="text-center px-2 py-2 text-slate-400 text-xs">-</TableCell>
+                                <TableCell className="text-center px-2 py-2 text-slate-400 text-xs">-</TableCell>
+                                <TableCell className="text-center px-2 py-2 text-slate-400 text-xs">-</TableCell>
+                                <TableCell className="text-center px-2 py-2 text-slate-700 dark:text-slate-200 text-xs">
                                     {totals?.totalCorteSeleccionado}
                                 </TableCell>
-                                <TableCell className="text-right px-3 py-3 font-mono text-slate-700 dark:text-slate-200">
+                                <TableCell className="text-right px-2 py-2 font-mono text-slate-700 dark:text-slate-200 text-xs">
                                     S/ {totals?.avgPrecio.toFixed(2)}
                                 </TableCell>
-                                <TableCell className="text-right px-3 py-3">
-                                    <Badge className="bg-green-600 text-white text-base px-3 py-1">
+                                <TableCell className="text-right px-2 py-2">
+                                    <Badge className="bg-green-600 text-white text-sm px-2 py-1">
                                         S/ {totals?.totalPagar.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
                                     </Badge>
                                 </TableCell>

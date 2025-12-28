@@ -1,40 +1,69 @@
 -- ============================================================================
--- FUNCIÓN RPC: get_comisiones_resumen (VERSIÓN CON CAMPOS CALCULADOS)
--- ============================================================================
--- Esta función calcula el resumen de comisiones por agencia directamente en
--- la base de datos de Supabase. Incluye:
--- - JOIN con tabla Parametros para META y TOP
--- - JOIN con factor_multiplicador_regular para el factor
--- - Cálculos: % Cumplimiento, Factor Multiplicador, Total a Pagar
---
--- PARÁMETROS:
---   p_zona: 'lima' o 'provincia'
---   p_mes: número del mes (1-12)
---   p_year: año (por defecto 2025)
---   p_corte: número del corte (1, 2, 3 o 4) - determina qué corte usar para el total
---
--- EJEMPLO DE USO:
---   SELECT * FROM get_comisiones_resumen('lima', 8, 2025, 1);
---
--- DESDE LA APP (JavaScript/TypeScript):
---   const { data } = await supabase.rpc('get_comisiones_resumen', {
---       p_zona: 'lima',
---       p_mes: 8,
---       p_year: 2025,
---       p_corte: 1
---   });
+-- TABLAS DE FACTORES MULTIPLICADORES
 -- ============================================================================
 
--- Eliminar versiones anteriores de la función
+-- Tabla para agencias GOLD
+CREATE TABLE IF NOT EXISTS factor_multiplicador_gold (
+    id SERIAL PRIMARY KEY,
+    limite_inferior DECIMAL(5,2) NOT NULL,
+    limite_superior DECIMAL(5,2),
+    factor DECIMAL(3,1) NOT NULL
+);
+
+-- Tabla para agencias SILVER
+CREATE TABLE IF NOT EXISTS factor_multiplicador_silver (
+    id SERIAL PRIMARY KEY,
+    limite_inferior DECIMAL(5,2) NOT NULL,
+    limite_superior DECIMAL(5,2),
+    factor DECIMAL(3,1) NOT NULL
+);
+
+-- ============================================================================
+-- TABLAS PARA MARCHA BLANCA Y BONO ARPU
+-- ============================================================================
+
+-- Marcha Blanca: Agencias que reciben factor 2.5 automáticamente
+CREATE TABLE IF NOT EXISTS marcha_blanca (
+    id SERIAL PRIMARY KEY,
+    ruc VARCHAR(20) NOT NULL,
+    agencia VARCHAR(255),
+    periodo INTEGER NOT NULL,  -- Formato YYYYMM
+    marcha_blanca VARCHAR(10) NOT NULL DEFAULT 'No',  -- 'Sí' o 'No'
+    zona VARCHAR(50),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(ruc, periodo, zona)
+);
+
+-- Bono ARPU: Agencias que reciben +1 a su multiplicador final
+CREATE TABLE IF NOT EXISTS bono_1_arpu (
+    id SERIAL PRIMARY KEY,
+    ruc VARCHAR(20) NOT NULL,
+    agencia VARCHAR(255),
+    periodo INTEGER NOT NULL,  -- Formato YYYYMM
+    bono_1_arpu VARCHAR(10) NOT NULL DEFAULT 'No',  -- 'Sí' o 'No'
+    zona VARCHAR(50),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(ruc, periodo, zona)
+);
+
+-- ============================================================================
+-- FUNCIÓN RPC: get_comisiones_resumen
+-- ============================================================================
+-- Incluye:
+--   - Factores GOLD/SILVER/REGULAR según TOP
+--   - Marcha Blanca: Si tiene = factor 2.5 automático
+--   - Bono ARPU: Si tiene = multiplicador_final + 1
+--   - Total a Pagar usa multiplicador_final
+-- ============================================================================
+
 DROP FUNCTION IF EXISTS get_comisiones_resumen(TEXT, INTEGER, INTEGER);
 DROP FUNCTION IF EXISTS get_comisiones_resumen(TEXT, INTEGER, INTEGER, INTEGER);
 
--- Crear la función RPC con campos calculados
 CREATE OR REPLACE FUNCTION get_comisiones_resumen(
     p_zona TEXT,
     p_mes INTEGER,
     p_year INTEGER DEFAULT 2025,
-    p_corte INTEGER DEFAULT 1  -- Corte seleccionado: 1, 2, 3 o 4
+    p_corte INTEGER DEFAULT 1
 )
 RETURNS TABLE (
     ruc TEXT,
@@ -47,9 +76,11 @@ RETURNS TABLE (
     corte_3 BIGINT,
     corte_4 BIGINT,
     precio_sin_igv_promedio NUMERIC,
-    -- Campos calculados
     porcentaje_cumplimiento NUMERIC,
+    marcha_blanca TEXT,
+    bono_arpu TEXT,
     factor_multiplicador NUMERIC,
+    multiplicador_final NUMERIC,
     total_a_pagar NUMERIC
 )
 LANGUAGE plpgsql
@@ -60,11 +91,8 @@ DECLARE
     end_date DATE;
     v_periodo INTEGER;
 BEGIN
-    -- Calcular el rango de fechas del mes
     start_date := make_date(p_year, p_mes, 1);
     end_date := start_date + INTERVAL '1 month';
-    
-    -- Calcular el periodo como INTEGER (formato YYYYMM)
     v_periodo := (p_year * 100) + p_mes;
     
     RETURN QUERY
@@ -79,17 +107,83 @@ BEGIN
         datos.corte_3,
         datos.corte_4,
         datos.precio_sin_igv_promedio,
-        -- % Cumplimiento = (altas / meta) * 100, evitar división por cero
+        -- % Cumplimiento
         CASE 
             WHEN datos.meta > 0 THEN ROUND((datos.altas::NUMERIC / datos.meta::NUMERIC) * 100, 2)
             ELSE 0
         END as porcentaje_cumplimiento,
-        -- Factor Multiplicador desde la tabla factor_multiplicador_regular
-        COALESCE(fm.factor, 1.3)::NUMERIC as factor_multiplicador,
-        -- Total a Pagar = precio_sin_igv_promedio * factor * corte_seleccionado
+        -- Marcha Blanca (Sí/No)
+        COALESCE(mb.marcha_blanca, 'No')::TEXT as marcha_blanca,
+        -- Bono ARPU (Sí/No)
+        COALESCE(ba.bono_1_arpu, 'No')::TEXT as bono_arpu,
+        -- Factor Multiplicador (2.5 si tiene marcha blanca, sino el calculado)
+        CASE 
+            WHEN UPPER(COALESCE(mb.marcha_blanca, 'No')) IN ('SÍ', 'SI') THEN 2.5
+            ELSE COALESCE(
+                CASE UPPER(datos.top)
+                    WHEN 'GOLD' THEN fg.factor
+                    WHEN 'SILVER' THEN fs.factor
+                    ELSE fr.factor
+                END,
+                1.3
+            )
+        END::NUMERIC as factor_multiplicador,
+        -- Multiplicador Final (factor + 1 si tiene bono ARPU)
+        CASE 
+            WHEN UPPER(COALESCE(ba.bono_1_arpu, 'No')) IN ('SÍ', 'SI') THEN
+                CASE 
+                    WHEN UPPER(COALESCE(mb.marcha_blanca, 'No')) IN ('SÍ', 'SI') THEN 2.5 + 1
+                    ELSE COALESCE(
+                        CASE UPPER(datos.top)
+                            WHEN 'GOLD' THEN fg.factor
+                            WHEN 'SILVER' THEN fs.factor
+                            ELSE fr.factor
+                        END,
+                        1.3
+                    ) + 1
+                END
+            ELSE
+                CASE 
+                    WHEN UPPER(COALESCE(mb.marcha_blanca, 'No')) IN ('SÍ', 'SI') THEN 2.5
+                    ELSE COALESCE(
+                        CASE UPPER(datos.top)
+                            WHEN 'GOLD' THEN fg.factor
+                            WHEN 'SILVER' THEN fs.factor
+                            ELSE fr.factor
+                        END,
+                        1.3
+                    )
+                END
+        END::NUMERIC as multiplicador_final,
+        -- Total a Pagar (usa multiplicador_final)
         ROUND(
             datos.precio_sin_igv_promedio * 
-            COALESCE(fm.factor, 1.3) * 
+            CASE 
+                WHEN UPPER(COALESCE(ba.bono_1_arpu, 'No')) IN ('SÍ', 'SI') THEN
+                    CASE 
+                        WHEN UPPER(COALESCE(mb.marcha_blanca, 'No')) IN ('SÍ', 'SI') THEN 2.5 + 1
+                        ELSE COALESCE(
+                            CASE UPPER(datos.top)
+                                WHEN 'GOLD' THEN fg.factor
+                                WHEN 'SILVER' THEN fs.factor
+                                ELSE fr.factor
+                            END,
+                            1.3
+                        ) + 1
+                    END
+                ELSE
+                    CASE 
+                        WHEN UPPER(COALESCE(mb.marcha_blanca, 'No')) IN ('SÍ', 'SI') THEN 2.5
+                        ELSE COALESCE(
+                            CASE UPPER(datos.top)
+                                WHEN 'GOLD' THEN fg.factor
+                                WHEN 'SILVER' THEN fs.factor
+                                ELSE fr.factor
+                            END,
+                            1.3
+                        )
+                    END
+            END * 
             CASE p_corte
                 WHEN 1 THEN datos.corte_1
                 WHEN 2 THEN datos.corte_2
@@ -100,26 +194,24 @@ BEGIN
             2
         )::NUMERIC as total_a_pagar
     FROM (
-        -- Subconsulta principal con datos base
+        -- Datos base
         SELECT 
             ventas.ruc,
             ventas.agencia,
             COALESCE(p."META", 0)::BIGINT as meta,
-            COALESCE(p."TOP", 'N/A')::TEXT as top,
+            COALESCE(p."TOP", 'REGULAR')::TEXT as top,
             ventas.altas,
             ventas.corte_1,
             ventas.corte_2,
             ventas.corte_3,
             ventas.corte_4,
             ventas.precio_sin_igv_promedio,
-            -- Calcular % cumplimiento para buscar el factor
             CASE 
                 WHEN COALESCE(p."META", 0) > 0 
                 THEN (ventas.altas::NUMERIC / p."META"::NUMERIC) * 100
                 ELSE 0
             END as pct_cumplimiento
         FROM (
-            -- Agregar ventas por agencia
             SELECT 
                 sr."DNI_ASESOR"::TEXT as ruc,
                 sr."ASESOR"::TEXT as agencia,
@@ -134,36 +226,46 @@ BEGIN
                 sr."FECHA_VALIDACION" IS NOT NULL
                 AND sr."FECHA_INSTALADO" >= start_date
                 AND sr."FECHA_INSTALADO" < end_date
-                AND (
-                    LOWER(p_zona) = 'provincia' 
-                    OR sr."CANAL" = 'Agencias'
-                )
+                AND (LOWER(p_zona) = 'provincia' OR sr."CANAL" = 'Agencias')
             GROUP BY sr."DNI_ASESOR", sr."ASESOR"
         ) ventas
-        -- JOIN con Parametros para obtener META y TOP
         LEFT JOIN "Parametros" p ON 
             p."RUC" = ventas.ruc 
             AND p."PERIODO" = v_periodo
             AND UPPER(p."ZONA") = UPPER(p_zona)
     ) datos
-    -- JOIN con factor_multiplicador_regular para obtener el factor según % cumplimiento
-    LEFT JOIN factor_multiplicador_regular fm ON 
-        datos.pct_cumplimiento >= fm.limite_inferior 
-        AND (datos.pct_cumplimiento <= fm.limite_superior OR fm.limite_superior IS NULL)
+    LEFT JOIN factor_multiplicador_gold fg ON 
+        UPPER(datos.top) = 'GOLD'
+        AND datos.pct_cumplimiento >= fg.limite_inferior 
+        AND (datos.pct_cumplimiento <= fg.limite_superior OR fg.limite_superior IS NULL)
+    LEFT JOIN factor_multiplicador_silver fs ON 
+        UPPER(datos.top) = 'SILVER'
+        AND datos.pct_cumplimiento >= fs.limite_inferior 
+        AND (datos.pct_cumplimiento <= fs.limite_superior OR fs.limite_superior IS NULL)
+    LEFT JOIN factor_multiplicador_regular fr ON 
+        UPPER(datos.top) NOT IN ('GOLD', 'SILVER')
+        AND datos.pct_cumplimiento >= fr.limite_inferior 
+        AND (datos.pct_cumplimiento <= fr.limite_superior OR fr.limite_superior IS NULL)
+    LEFT JOIN marcha_blanca mb ON 
+        mb.ruc = datos.ruc 
+        AND mb.periodo = v_periodo
+        AND UPPER(mb.zona) = UPPER(p_zona)
+    LEFT JOIN bono_1_arpu ba ON 
+        ba.ruc = datos.ruc 
+        AND ba.periodo = v_periodo
+        AND UPPER(ba.zona) = UPPER(p_zona)
     ORDER BY datos.altas DESC;
 END;
 $$;
 
--- Dar permisos de ejecución a usuarios anónimos y autenticados
+-- Permisos
 GRANT EXECUTE ON FUNCTION get_comisiones_resumen(TEXT, INTEGER, INTEGER, INTEGER) TO anon;
 GRANT EXECUTE ON FUNCTION get_comisiones_resumen(TEXT, INTEGER, INTEGER, INTEGER) TO authenticated;
 
--- ============================================================================
--- COMENTARIOS DE LA FUNCIÓN
--- ============================================================================
 COMMENT ON FUNCTION get_comisiones_resumen(TEXT, INTEGER, INTEGER, INTEGER) IS 
-'Calcula el resumen de comisiones por agencia con todos los campos calculados.
-Parámetros: p_zona, p_mes, p_year, p_corte (1-4).
-Incluye: META, TOP, ALTAS, CORTES 1-4, % CUMPLIMIENTO, FACTOR MULTIPLICADOR, TOTAL A PAGAR.
-Fórmula Total a Pagar: precio_sin_igv_promedio * factor_multiplicador * corte_seleccionado.';
+'Calcula comisiones con:
+- Factores GOLD/SILVER/REGULAR según TOP
+- Marcha Blanca: Si = factor 2.5 automático
+- Bono ARPU: Si = multiplicador_final + 1
+- Total a Pagar usa multiplicador_final';
 
