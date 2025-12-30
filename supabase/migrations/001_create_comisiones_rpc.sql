@@ -284,64 +284,16 @@ COMMENT ON FUNCTION get_comisiones_resumen(TEXT, INTEGER, INTEGER, INTEGER) IS
 - Total a Pagar usa multiplicador_final';
 
 -- ============================================================================
--- TABLA: resultado_comisiones_guardado
+-- TABLAS DE RESULTADOS POR CORTE
 -- ============================================================================
--- Almacena los resultados calculados de comisiones para cada periodo y corte
--- Permite consultas históricas y auditoría
+-- Cada corte tiene su propia tabla porque:
+-- - Corte 1: Solo comisión
+-- - Corte 2: Comisión + Penalidad 1 + Clawback 1
+-- - Corte 3: Penalidad 2 + Clawback 2
+-- - Corte 4: Penalidad 3 + Clawback 3
+-- ============================================================================
 
-CREATE TABLE IF NOT EXISTS resultado_comisiones_guardado (
-    id BIGSERIAL PRIMARY KEY,
-    
-    -- Identificadores del escenario
-    periodo INTEGER NOT NULL,  -- Formato YYYYMM (ej: 202504)
-    corte INTEGER NOT NULL,    -- 1, 2, 3 o 4
-    zona VARCHAR(50) NOT NULL, -- 'LIMA' o 'PROVINCIA'
-    
-    -- Datos de la agencia
-    ruc VARCHAR(20) NOT NULL,
-    agencia VARCHAR(255),
-    meta BIGINT,  -- NULL para marcha blanca
-    top VARCHAR(20),
-    
-    -- Resultados
-    altas BIGINT NOT NULL,
-    corte_1 BIGINT,
-    corte_2 BIGINT,
-    corte_3 BIGINT,
-    corte_4 BIGINT,
-    precio_sin_igv_promedio NUMERIC(10,2),
-    porcentaje_cumplimiento NUMERIC(5,2),  -- NULL para marcha blanca
-    
-    -- Bonificaciones
-    marcha_blanca VARCHAR(10) DEFAULT 'No',
-    bono_arpu VARCHAR(10) DEFAULT 'No',
-    
-    -- Multiplicadores
-    factor_multiplicador NUMERIC(4,1) NOT NULL,
-    multiplicador_final NUMERIC(4,1) NOT NULL,
-    
-    -- Total a pagar
-    total_a_pagar NUMERIC(12,2) NOT NULL,
-    
-    -- Auditoría
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    
-    -- Constraint único: Un RUC solo puede tener un resultado por periodo/corte/zona
-    UNIQUE(periodo, corte, zona, ruc)
-);
-
--- Índices para consultas rápidas
-CREATE INDEX IF NOT EXISTS idx_resultado_periodo_corte_zona 
-    ON resultado_comisiones_guardado(periodo, corte, zona);
-
-CREATE INDEX IF NOT EXISTS idx_resultado_ruc 
-    ON resultado_comisiones_guardado(ruc);
-
-CREATE INDEX IF NOT EXISTS idx_resultado_created_at 
-    ON resultado_comisiones_guardado(created_at DESC);
-
--- Trigger para actualizar updated_at automáticamente
+-- Función para actualizar updated_at
 CREATE OR REPLACE FUNCTION update_resultado_comisiones_timestamp()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -350,21 +302,195 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-DROP TRIGGER IF EXISTS trigger_update_resultado_comisiones_timestamp ON resultado_comisiones_guardado;
+-- ============================================================================
+-- TABLA: resultado_comisiones_corte_1 (Solo comisión)
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS resultado_comisiones_corte_1 (
+    id BIGSERIAL PRIMARY KEY,
+    periodo INTEGER NOT NULL,
+    zona VARCHAR(50) NOT NULL,
+    ruc VARCHAR(20) NOT NULL,
+    agencia VARCHAR(255),
+    meta BIGINT,
+    top VARCHAR(20),
+    altas BIGINT NOT NULL,
+    corte_1 BIGINT DEFAULT 0,
+    corte_2 BIGINT DEFAULT 0,
+    corte_3 BIGINT DEFAULT 0,
+    corte_4 BIGINT DEFAULT 0,
+    precio_sin_igv_promedio NUMERIC(10,2),
+    porcentaje_cumplimiento NUMERIC(5,2),
+    marcha_blanca VARCHAR(10) DEFAULT 'No',
+    bono_arpu VARCHAR(10) DEFAULT 'No',
+    factor_multiplicador NUMERIC(4,1) NOT NULL DEFAULT 1.3,
+    multiplicador_final NUMERIC(4,1) NOT NULL DEFAULT 1.3,
+    total_a_pagar_corte_1 NUMERIC(12,2) NOT NULL DEFAULT 0,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(periodo, zona, ruc)
+);
 
-CREATE TRIGGER trigger_update_resultado_comisiones_timestamp
-    BEFORE UPDATE ON resultado_comisiones_guardado
-    FOR EACH ROW
-    EXECUTE FUNCTION update_resultado_comisiones_timestamp();
+CREATE INDEX IF NOT EXISTS idx_corte_1_periodo_zona ON resultado_comisiones_corte_1(periodo, zona);
+CREATE INDEX IF NOT EXISTS idx_corte_1_ruc ON resultado_comisiones_corte_1(ruc);
 
--- Permisos
-GRANT SELECT, INSERT, UPDATE, DELETE ON resultado_comisiones_guardado TO authenticated;
-GRANT SELECT ON resultado_comisiones_guardado TO anon;
-GRANT USAGE, SELECT ON SEQUENCE resultado_comisiones_guardado_id_seq TO authenticated;
+-- ============================================================================
+-- TABLA: resultado_comisiones_corte_2 (Comisión + Penalidad 1 + Clawback 1)
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS resultado_comisiones_corte_2 (
+    id BIGSERIAL PRIMARY KEY,
+    periodo INTEGER NOT NULL,
+    zona VARCHAR(50) NOT NULL,
+    ruc VARCHAR(20) NOT NULL,
+    agencia VARCHAR(255),
+    meta BIGINT,
+    top VARCHAR(20),
+    altas BIGINT NOT NULL,
+    precio_sin_igv_promedio NUMERIC(10,2),
+    corte_1 BIGINT DEFAULT 0,
+    corte_2 BIGINT DEFAULT 0,
+    corte_3 BIGINT DEFAULT 0,
+    corte_4 BIGINT DEFAULT 0,
+    primer_recibo_pagado BIGINT DEFAULT 0,
+    recibos_no_pagados_corte_2 BIGINT DEFAULT 0,
+    porcentaje_cumplimiento NUMERIC(5,2),
+    marcha_blanca VARCHAR(10) DEFAULT 'No',
+    bono_arpu VARCHAR(10) DEFAULT 'No',
+    factor_multiplicador NUMERIC(4,1) NOT NULL DEFAULT 1.3,
+    multiplicador_final NUMERIC(4,1) NOT NULL DEFAULT 1.3,
+    comision_total NUMERIC(12,2) DEFAULT 0,
+    pago_corte_1 NUMERIC(12,2) DEFAULT 0,
+    total_a_pagar_corte_2 NUMERIC(12,2) NOT NULL DEFAULT 0,
+    penalidad_1_churn_4_5_pct NUMERIC(5,2),
+    penalidad_1_umbral BIGINT,
+    penalidad_1_altas_penalizadas BIGINT,
+    penalidad_1_monto NUMERIC(12,2) DEFAULT 0,
+    clawback_1_umbral_corte_2 BIGINT,
+    clawback_1_cumplimiento_pct NUMERIC(5,2),
+    clawback_1_multiplicador NUMERIC(4,1),
+    clawback_1_monto NUMERIC(12,2) DEFAULT 0,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(periodo, zona, ruc)
+);
 
--- Comentario
-COMMENT ON TABLE resultado_comisiones_guardado IS 
-'Almacena resultados calculados de comisiones por periodo, corte y zona. 
-Permite consultas históricas y auditoría.
-UNIQUE constraint: (periodo, corte, zona, ruc)';
+CREATE INDEX IF NOT EXISTS idx_corte_2_periodo_zona ON resultado_comisiones_corte_2(periodo, zona);
+CREATE INDEX IF NOT EXISTS idx_corte_2_ruc ON resultado_comisiones_corte_2(ruc);
+
+-- ============================================================================
+-- TABLA: resultado_comisiones_corte_3 (Penalidad 2 + Clawback 2)
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS resultado_comisiones_corte_3 (
+    id BIGSERIAL PRIMARY KEY,
+    periodo INTEGER NOT NULL,
+    zona VARCHAR(50) NOT NULL,
+    ruc VARCHAR(20) NOT NULL,
+    agencia VARCHAR(255),
+    meta BIGINT,
+    top VARCHAR(20),
+    altas BIGINT NOT NULL,
+    precio_sin_igv_promedio NUMERIC(10,2),
+    corte_1 BIGINT DEFAULT 0,
+    corte_2 BIGINT DEFAULT 0,
+    corte_3 BIGINT DEFAULT 0,
+    corte_4 BIGINT DEFAULT 0,
+    primer_recibo_pagado BIGINT DEFAULT 0,
+    segundo_recibo_pagado BIGINT DEFAULT 0,
+    recibos_no_pagados_corte_3 BIGINT DEFAULT 0,
+    porcentaje_cumplimiento NUMERIC(5,2),
+    marcha_blanca VARCHAR(10) DEFAULT 'No',
+    bono_arpu VARCHAR(10) DEFAULT 'No',
+    factor_multiplicador NUMERIC(4,1) NOT NULL DEFAULT 1.3,
+    multiplicador_final NUMERIC(4,1) NOT NULL DEFAULT 1.3,
+    clawback_1_umbral_corte_2 BIGINT,
+    clawback_1_cumplimiento_pct NUMERIC(5,2),
+    clawback_1_multiplicador NUMERIC(4,1),
+    penalidad_2_churn_3_5_pct NUMERIC(5,2),
+    penalidad_2_umbral BIGINT,
+    penalidad_2_altas_penalizadas BIGINT,
+    penalidad_2_monto NUMERIC(12,2) DEFAULT 0,
+    clawback_2_umbral_corte_3 BIGINT,
+    clawback_2_cumplimiento_pct NUMERIC(5,2),
+    clawback_2_multiplicador NUMERIC(4,1),
+    clawback_2_monto NUMERIC(12,2) DEFAULT 0,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(periodo, zona, ruc)
+);
+
+CREATE INDEX IF NOT EXISTS idx_corte_3_periodo_zona ON resultado_comisiones_corte_3(periodo, zona);
+CREATE INDEX IF NOT EXISTS idx_corte_3_ruc ON resultado_comisiones_corte_3(ruc);
+
+-- ============================================================================
+-- TABLA: resultado_comisiones_corte_4 (Penalidad 3 + Clawback 3)
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS resultado_comisiones_corte_4 (
+    id BIGSERIAL PRIMARY KEY,
+    periodo INTEGER NOT NULL,
+    zona VARCHAR(50) NOT NULL,
+    ruc VARCHAR(20) NOT NULL,
+    agencia VARCHAR(255),
+    meta BIGINT,
+    top VARCHAR(20),
+    altas BIGINT NOT NULL,
+    precio_sin_igv_promedio NUMERIC(10,2),
+    corte_1 BIGINT DEFAULT 0,
+    corte_2 BIGINT DEFAULT 0,
+    corte_3 BIGINT DEFAULT 0,
+    corte_4 BIGINT DEFAULT 0,
+    segundo_recibo_pagado BIGINT DEFAULT 0,
+    tercer_recibo_pagado BIGINT DEFAULT 0,
+    recibos_no_pagados_corte_4 BIGINT DEFAULT 0,
+    porcentaje_cumplimiento NUMERIC(5,2),
+    marcha_blanca VARCHAR(10) DEFAULT 'No',
+    bono_arpu VARCHAR(10) DEFAULT 'No',
+    factor_multiplicador NUMERIC(4,1) NOT NULL DEFAULT 1.3,
+    multiplicador_final NUMERIC(4,1) NOT NULL DEFAULT 1.3,
+    clawback_2_umbral_corte_3 BIGINT,
+    clawback_2_cumplimiento_pct NUMERIC(5,2),
+    clawback_2_multiplicador NUMERIC(4,1),
+    penalidad_3_churn_2_5_pct NUMERIC(5,2),
+    penalidad_3_umbral BIGINT,
+    penalidad_3_altas_penalizadas BIGINT,
+    penalidad_3_monto NUMERIC(12,2) DEFAULT 0,
+    clawback_3_umbral_corte_4 BIGINT,
+    clawback_3_cumplimiento_pct NUMERIC(5,2),
+    clawback_3_multiplicador NUMERIC(4,1),
+    clawback_3_monto NUMERIC(12,2) DEFAULT 0,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(periodo, zona, ruc)
+);
+
+CREATE INDEX IF NOT EXISTS idx_corte_4_periodo_zona ON resultado_comisiones_corte_4(periodo, zona);
+CREATE INDEX IF NOT EXISTS idx_corte_4_ruc ON resultado_comisiones_corte_4(ruc);
+
+-- Triggers para updated_at
+CREATE TRIGGER trigger_update_corte_1_timestamp BEFORE UPDATE ON resultado_comisiones_corte_1 FOR EACH ROW EXECUTE FUNCTION update_resultado_comisiones_timestamp();
+CREATE TRIGGER trigger_update_corte_2_timestamp BEFORE UPDATE ON resultado_comisiones_corte_2 FOR EACH ROW EXECUTE FUNCTION update_resultado_comisiones_timestamp();
+CREATE TRIGGER trigger_update_corte_3_timestamp BEFORE UPDATE ON resultado_comisiones_corte_3 FOR EACH ROW EXECUTE FUNCTION update_resultado_comisiones_timestamp();
+CREATE TRIGGER trigger_update_corte_4_timestamp BEFORE UPDATE ON resultado_comisiones_corte_4 FOR EACH ROW EXECUTE FUNCTION update_resultado_comisiones_timestamp();
+
+-- Permisos para tablas de cortes
+GRANT SELECT, INSERT, UPDATE, DELETE ON resultado_comisiones_corte_1 TO authenticated;
+GRANT SELECT ON resultado_comisiones_corte_1 TO anon;
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON resultado_comisiones_corte_2 TO authenticated;
+GRANT SELECT ON resultado_comisiones_corte_2 TO anon;
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON resultado_comisiones_corte_3 TO authenticated;
+GRANT SELECT ON resultado_comisiones_corte_3 TO anon;
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON resultado_comisiones_corte_4 TO authenticated;
+GRANT SELECT ON resultado_comisiones_corte_4 TO anon;
+
+GRANT USAGE, SELECT ON SEQUENCE resultado_comisiones_corte_1_id_seq TO authenticated;
+GRANT USAGE, SELECT ON SEQUENCE resultado_comisiones_corte_2_id_seq TO authenticated;
+GRANT USAGE, SELECT ON SEQUENCE resultado_comisiones_corte_3_id_seq TO authenticated;
+GRANT USAGE, SELECT ON SEQUENCE resultado_comisiones_corte_4_id_seq TO authenticated;
+
+-- Comentarios
+COMMENT ON TABLE resultado_comisiones_corte_1 IS 'CORTE 1: Solo comisión inicial';
+COMMENT ON TABLE resultado_comisiones_corte_2 IS 'CORTE 2: Comisión + Penalidad 1 + Clawback 1';
+COMMENT ON TABLE resultado_comisiones_corte_3 IS 'CORTE 3: Penalidad 2 + Clawback 2';
+COMMENT ON TABLE resultado_comisiones_corte_4 IS 'CORTE 4: Penalidad 3 + Clawback 3';
 

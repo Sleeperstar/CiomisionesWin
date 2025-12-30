@@ -110,10 +110,21 @@ export default function ResultadoComision({ corte, zona, mes }: { corte: string;
             const year = 2025;
             const periodo = (year * 100) + monthNumber;
 
-            // Preparar datos para inserción
+            // Por ahora solo implementamos Corte 1
+            // Los cortes 2, 3 y 4 tienen estructuras diferentes con penalidades y clawbacks
+            if (corteNumber !== 1) {
+                toast({
+                    title: "Corte no implementado",
+                    description: `El guardado del Corte ${corteNumber} aún no está implementado. Por favor usa Corte 1.`,
+                    variant: "destructive"
+                });
+                setSaving(false);
+                return;
+            }
+
+            // Preparar datos para inserción en tabla resultado_comisiones_corte_1
             const dataToSave = data.map(row => ({
                 periodo,
-                corte: corteNumber,
                 zona: zona.toUpperCase(),
                 ruc: row.ruc || '',
                 agencia: row.agencia || '',
@@ -130,14 +141,14 @@ export default function ResultadoComision({ corte, zona, mes }: { corte: string;
                 bono_arpu: row.bono_arpu,
                 factor_multiplicador: row.factor_multiplicador,
                 multiplicador_final: row.multiplicador_final,
-                total_a_pagar: row.total_a_pagar
+                total_a_pagar_corte_1: row.total_a_pagar  // Renombrado para corte 1
             }));
 
-            // Insertar o actualizar (upsert)
+            // Insertar o actualizar (upsert) en tabla de Corte 1
             const { error } = await supabase
-                .from('resultado_comisiones_guardado')
+                .from('resultado_comisiones_corte_1')
                 .upsert(dataToSave, {
-                    onConflict: 'periodo,corte,zona,ruc',
+                    onConflict: 'periodo,zona,ruc',
                     ignoreDuplicates: false
                 });
 
@@ -151,7 +162,7 @@ export default function ResultadoComision({ corte, zona, mes }: { corte: string;
                 duration: 5000
             });
 
-            console.log(`[Resultado Comision] ✅ Guardados ${dataToSave.length} registros en resultado_comisiones_guardado`);
+            console.log(`[Resultado Comision] ✅ Guardados ${dataToSave.length} registros en resultado_comisiones_corte_1`);
 
         } catch (error: unknown) {
             console.error(`Error guardando resultados:`, error);
