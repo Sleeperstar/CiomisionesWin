@@ -14,6 +14,29 @@ interface Message {
   content: string;
 }
 
+// Función para renderizar una línea con formato markdown básico
+function renderLine(line: string): React.ReactNode {
+  // Si la línea es un separador
+  if (line === '---') {
+    return <hr className="my-2 border-slate-300 dark:border-slate-600" />;
+  }
+  
+  // Procesar negritas **texto**
+  const parts = line.split(/(\*\*[^*]+\*\*)/g);
+  
+  return (
+    <span>
+      {parts.map((part, idx) => {
+        if (part.startsWith('**') && part.endsWith('**')) {
+          // Es texto en negrita
+          return <strong key={idx} className="font-semibold">{part.slice(2, -2)}</strong>;
+        }
+        return <span key={idx}>{part}</span>;
+      })}
+    </span>
+  );
+}
+
 export default function ChatbotInterface() {
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -143,16 +166,7 @@ export default function ChatbotInterface() {
                   <div className="text-sm whitespace-pre-wrap break-words">
                     {message.content.split('\n').map((line, i) => (
                       <React.Fragment key={i}>
-                        {/* Procesar markdown básico */}
-                        {line.startsWith('**') && line.endsWith('**') ? (
-                          <strong>{line.replace(/\*\*/g, '')}</strong>
-                        ) : line.startsWith('• ') ? (
-                          <div className="ml-2">• {line.substring(2)}</div>
-                        ) : line.startsWith('📊') ? (
-                          <div className="font-semibold text-base mb-2">{line}</div>
-                        ) : (
-                          line
-                        )}
+                        {renderLine(line)}
                         {i < message.content.split('\n').length - 1 && <br />}
                       </React.Fragment>
                     ))}

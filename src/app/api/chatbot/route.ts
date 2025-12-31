@@ -10,6 +10,13 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
+// Helper para convertir número de mes a nombre
+function obtenerNombreMes(mes: number): string {
+  const meses = ['', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 
+                 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+  return meses[mes] || '';
+}
+
 // Función para obtener el esquema de la base de datos
 async function getDatabaseSchema() {
   return `
@@ -35,44 +42,54 @@ TABLAS PRINCIPALES:
    - Igual que corte 1 más:
    - primer_recibo_pagado, recibos_no_pagados_corte_2
    - comision_total, pago_corte_1, total_a_pagar_corte_2
-   - penalidad_1_*, clawback_1_*
+   - penalidad_1_churn_4_5_pct, penalidad_1_umbral, penalidad_1_altas_penalizadas, penalidad_1_monto
+   - clawback_1_umbral_corte_2, clawback_1_cumplimiento_pct, clawback_1_multiplicador, clawback_1_monto
 
 4. resultado_comisiones_corte_3 - Resultados del CORTE 3 (penalidad 2 + clawback 2)
    - segundo_recibo_pagado, recibos_no_pagados_corte_3
-   - penalidad_2_*, clawback_2_*
+   - penalidad_2_churn_3_5_pct, penalidad_2_umbral, penalidad_2_altas_penalizadas, penalidad_2_monto
+   - clawback_2_umbral_corte_3, clawback_2_cumplimiento_pct, clawback_2_multiplicador, clawback_2_monto
 
 5. resultado_comisiones_corte_4 - Resultados del CORTE 4 (penalidad 3 + clawback 3)
    - tercer_recibo_pagado, recibos_no_pagados_corte_4
-   - penalidad_3_*, clawback_3_*
+   - penalidad_3_churn_2_5_pct, penalidad_3_umbral, penalidad_3_altas_penalizadas, penalidad_3_monto
+   - clawback_3_umbral_corte_4, clawback_3_cumplimiento_pct, clawback_3_multiplicador, clawback_3_monto
 
 6. Parametros - Metas y clasificación de agencias
    - RUC, PERIODO (YYYYMM), ZONA
    - META (objetivo de ventas)
    - TOP (GOLD, SILVER, REGULAR)
 
-4. factor_multiplicador_regular, factor_multiplicador_gold, factor_multiplicador_silver
+7. factor_multiplicador_regular, factor_multiplicador_gold, factor_multiplicador_silver
    - limite_inferior, limite_superior (% cumplimiento)
    - factor (multiplicador)
 
-5. marcha_blanca - Agencias en periodo de prueba
+8. marcha_blanca - Agencias en periodo de prueba
    - ruc, agencia, periodo, zona
    - marcha_blanca (Sí/No)
 
-6. bono_1_arpu - Bonos adicionales
+9. bono_1_arpu - Bonos adicionales
    - ruc, agencia, periodo, zona
    - bono_1_arpu (Sí/No)
 
 REGLAS DE NEGOCIO:
 - Periodo formato: YYYYMM (202508 = agosto 2025)
 - Cortes: 1, 2, 3, 4 (periodos de pago)
+- CORTE 1: Solo comisión inicial (total_a_pagar_corte_1)
+- CORTE 2: Comisión restante + Penalidad 1 (penalidad_1_monto) + Clawback 1 (clawback_1_monto)
+- CORTE 3: Penalidad 2 (penalidad_2_monto) + Clawback 2 (clawback_2_monto)
+- CORTE 4: Penalidad 3 (penalidad_3_monto) + Clawback 3 (clawback_3_monto)
+- Penalidad: Descuento por altas que no pagaron recibos (churn)
+- Clawback: Devolución de comisión por incumplimiento
 - Marcha Blanca: Factor automático 2.5, sin meta ni % cumplimiento
 - Bono ARPU: +1 al multiplicador final
-- Comisión = precio_sin_igv_promedio × multiplicador_final × corte_X
+- Comisión = precio_sin_igv_promedio × multiplicador_final × altas_corte
 
-CONSULTAS COMUNES:
-- "Cuánto comisionó [agencia] en [mes] corte [X]": buscar en resultado_comisiones_guardado
-- "Cuántas altas tuvo [agencia]": sumar altas de resultado_comisiones_guardado o SalesRecord
-- "Qué agencias son GOLD/SILVER": filtrar por top en Parametros o resultado_comisiones_guardado
+TIPOS DE CONSULTA:
+- COMISIÓN: Preguntar cuánto ganó/comisionó la agencia → total_a_pagar_corte_X
+- PENALIDAD: Preguntar por penalidad/descuento → penalidad_X_monto (está en corte 2, 3 o 4)
+- CLAWBACK: Preguntar por clawback/devolución → clawback_X_monto
+- ALTAS: Número de instalaciones validadas
 `;
 }
 
@@ -99,23 +116,35 @@ export async function POST(req: NextRequest) {
 ${dbSchema}
 
 INSTRUCCIONES:
-1. Analiza la pregunta del usuario y determina qué tabla necesitas consultar
-2. Para preguntas sobre comisiones específicas, usa resultado_comisiones_guardado
-3. Convierte nombres de meses en español a formato YYYYMM (ejemplo: "agosto 2025" -> 202508)
-4. Busca por nombre de agencia (campo "agencia") de manera flexible (ignora mayúsculas/minúsculas)
-5. Responde de manera clara y concisa en español
-6. Si no encuentras datos, sugiere verificar el periodo o el nombre de la agencia
-7. Incluye el total_a_pagar cuando se pregunte por comisiones
-8. Si la pregunta es ambigua, pide aclaraciones
+1. Analiza la pregunta del usuario y determina qué tipo de consulta es:
+   - COMISIÓN: Si pregunta cuánto ganó, comisionó, total a pagar → tipo_consulta = "comision"
+   - PENALIDAD: Si pregunta por penalidad, descuento por churn → tipo_consulta = "penalidad"
+   - CLAWBACK: Si pregunta por clawback, devolución → tipo_consulta = "clawback"
+   - ALTAS: Si pregunta por altas, instalaciones → tipo_consulta = "altas"
+   - GENERAL: Si quiere ver todo el detalle → tipo_consulta = "detalle"
+2. Convierte nombres de meses en español a formato YYYYMM (ejemplo: "agosto 2025" -> 202508, "agosto" sin año -> 202508 asumiendo 2025)
+3. Busca por nombre de agencia de manera flexible (ignora mayúsculas/minúsculas)
+4. IMPORTANTE: Las penalidades están en los cortes 2, 3 y 4:
+   - Penalidad 1 está en resultado_comisiones_corte_2 (campo penalidad_1_monto)
+   - Penalidad 2 está en resultado_comisiones_corte_3 (campo penalidad_2_monto)
+   - Penalidad 3 está en resultado_comisiones_corte_4 (campo penalidad_3_monto)
+5. Si preguntan por penalidad sin especificar número, busca en corte 2 primero (penalidad 1)
+6. Responde de manera clara y concisa en español
+7. NO uses asteriscos para negritas ni formato markdown, usa texto plano
+8. Usa emojis para hacer la respuesta más visual
 
 EJEMPLOS:
 Pregunta: "Cuánto comisionó ALIV en agosto corte 1?"
--> Buscar en resultado_comisiones_guardado donde agencia LIKE '%ALIV%', periodo = 202508, corte = 1
--> Responder: "ALIV TELECOM S.A.C. comisionó S/ X,XXX.XX en agosto 2025, corte 1"
+-> tipo_consulta = "comision", corte = 1
+-> Responder: "📊 ALIV TELECOM S.A.C. comisionó S/ X,XXX.XX en agosto 2025, corte 1"
+
+Pregunta: "Cuál fue la penalidad de ALIV en agosto?"
+-> tipo_consulta = "penalidad", corte = 2 (donde está penalidad 1)
+-> Responder: "⚠️ ALIV TELECOM S.A.C. tuvo una penalidad de S/ X,XXX.XX en agosto 2025"
 
 Pregunta: "Cuántas altas tuvo EXPORTEL en abril?"
--> Buscar en resultado_comisiones_guardado donde agencia LIKE '%EXPORTEL%', periodo = 202504
--> Responder: "EXPORTEL S.A.C. tuvo XXX altas en abril 2025"`,
+-> tipo_consulta = "altas"
+-> Responder: "📈 EXPORTEL S.A.C. tuvo XXX altas en abril 2025"`,
       },
       ...conversationHistory,
       {
@@ -129,11 +158,11 @@ Pregunta: "Cuántas altas tuvo EXPORTEL en abril?"
       model: 'gpt-4',
       messages,
       temperature: 0.7,
-      max_tokens: 500,
+      max_tokens: 800,
       functions: [
         {
           name: 'buscar_comisiones',
-          description: 'Busca información de comisiones de una agencia en un periodo y corte específico',
+          description: 'Busca información de comisiones, penalidades, clawbacks o altas de una agencia en un periodo específico',
           parameters: {
             type: 'object',
             properties: {
@@ -143,18 +172,23 @@ Pregunta: "Cuántas altas tuvo EXPORTEL en abril?"
               },
               periodo: {
                 type: 'integer',
-                description: 'Periodo en formato YYYYMM (ej: 202504 para abril 2025)',
+                description: 'Periodo en formato YYYYMM (ej: 202504 para abril 2025, 202508 para agosto 2025)',
               },
               corte: {
                 type: 'integer',
-                description: 'Número de corte (1, 2, 3 o 4)',
+                description: 'Número de corte (1, 2, 3 o 4). Para penalidades: corte 2 tiene penalidad 1, corte 3 tiene penalidad 2, corte 4 tiene penalidad 3',
               },
               zona: {
                 type: 'string',
                 description: 'Zona: LIMA o PROVINCIA',
               },
+              tipo_consulta: {
+                type: 'string',
+                enum: ['comision', 'penalidad', 'clawback', 'altas', 'detalle'],
+                description: 'Tipo de información solicitada: comision (total a pagar), penalidad (descuento por churn), clawback (devolución), altas (instalaciones), detalle (todo)',
+              },
             },
-            required: ['agencia', 'periodo'],
+            required: ['agencia', 'periodo', 'tipo_consulta'],
           },
         },
       ],
@@ -169,7 +203,15 @@ Pregunta: "Cuántas altas tuvo EXPORTEL en abril?"
       const functionArgs = JSON.parse(responseMessage.function_call.arguments);
 
       if (functionName === 'buscar_comisiones') {
-        const { agencia, periodo, corte = 1, zona } = functionArgs;
+        const { agencia, periodo, zona, tipo_consulta = 'detalle' } = functionArgs;
+        
+        // Determinar el corte según el tipo de consulta
+        let corte = functionArgs.corte || 1;
+        
+        // Si piden penalidad sin especificar corte, buscar en corte 2 (penalidad 1)
+        if (tipo_consulta === 'penalidad' && !functionArgs.corte) {
+          corte = 2;
+        }
 
         // Determinar tabla según el corte
         const tableNames: { [key: number]: string } = {
@@ -202,8 +244,16 @@ Pregunta: "Cuántas altas tuvo EXPORTEL en abril?"
         }
 
         if (!data || data.length === 0) {
+          // Si no hay datos en el corte solicitado, dar mensaje específico
+          let mensajeNoData = `No encontré registros para "${agencia}" en el periodo ${periodo}`;
+          if (tipo_consulta === 'penalidad') {
+            mensajeNoData += `. Las penalidades se calculan en los cortes 2, 3 y 4. Verifica que existan datos guardados para ese corte.`;
+          } else {
+            mensajeNoData += ` corte ${corte}. Verifica el nombre de la agencia y que los datos estén guardados.`;
+          }
+          
           return NextResponse.json({
-            response: `No encontré registros para "${agencia}" en el periodo ${periodo} corte ${corte}. Verifica el nombre de la agencia y que los datos estén guardados.`,
+            response: mensajeNoData,
             conversationHistory: [
               ...conversationHistory,
               { role: 'user', content: message },
@@ -212,36 +262,120 @@ Pregunta: "Cuántas altas tuvo EXPORTEL en abril?"
           });
         }
 
-        // Formatear respuesta según el corte
+        // Formatear respuesta según el tipo de consulta
         const resultados = data.map(r => {
           const periodoStr = `${String(r.periodo).substring(0, 4)}/${String(r.periodo).substring(4, 6)}`;
+          const mesNombre = obtenerNombreMes(Number(String(r.periodo).substring(4, 6)));
           
-          // Obtener el total según el corte
-          let totalPagar = 0;
-          if (corte === 1) totalPagar = r.total_a_pagar_corte_1 || 0;
-          else if (corte === 2) totalPagar = r.total_a_pagar_corte_2 || 0;
-          // Para cortes 3 y 4, mostrar montos de penalidades/clawbacks
+          let resultado = '';
           
-          let resultado = `**${r.agencia}** (${periodoStr} - Corte ${corte}):\n` +
-                 `• Altas: ${r.altas}\n` +
-                 `• Meta: ${r.meta || '-'}\n` +
-                 `• % Cumplimiento: ${r.porcentaje_cumplimiento ? Number(r.porcentaje_cumplimiento).toFixed(1) + '%' : '-'}\n` +
-                 `• Multiplicador: x${r.multiplicador_final}`;
-
-          if (corte === 1) {
-            resultado += `\n• **Total comisión Corte 1: S/ ${Number(totalPagar).toFixed(2)}**`;
-          } else if (corte === 2) {
-            resultado += `\n• Comisión total: S/ ${Number(r.comision_total || 0).toFixed(2)}`;
-            resultado += `\n• Pago Corte 1: S/ ${Number(r.pago_corte_1 || 0).toFixed(2)}`;
-            resultado += `\n• **Total Corte 2: S/ ${Number(totalPagar).toFixed(2)}**`;
-            if (r.penalidad_1_monto) resultado += `\n• Penalidad 1: S/ ${Number(r.penalidad_1_monto).toFixed(2)}`;
-            if (r.clawback_1_monto) resultado += `\n• Clawback 1: S/ ${Number(r.clawback_1_monto).toFixed(2)}`;
+          switch (tipo_consulta) {
+            case 'penalidad':
+              // Mostrar información de penalidad según el corte
+              resultado = `⚠️ PENALIDAD - ${r.agencia}\n`;
+              resultado += `📅 Periodo: ${mesNombre} ${String(r.periodo).substring(0, 4)}\n\n`;
+              
+              if (corte === 2 && r.penalidad_1_monto !== undefined) {
+                resultado += `Penalidad 1 (Corte 2):\n`;
+                resultado += `  • Churn 4-5 recibos: ${r.penalidad_1_churn_4_5_pct ? Number(r.penalidad_1_churn_4_5_pct).toFixed(2) + '%' : 'N/A'}\n`;
+                resultado += `  • Umbral: ${r.penalidad_1_umbral || 0} altas\n`;
+                resultado += `  • Altas penalizadas: ${r.penalidad_1_altas_penalizadas || 0}\n`;
+                resultado += `  • 💰 Monto penalidad: S/ ${Number(r.penalidad_1_monto || 0).toFixed(2)}`;
+              } else if (corte === 3 && r.penalidad_2_monto !== undefined) {
+                resultado += `Penalidad 2 (Corte 3):\n`;
+                resultado += `  • Churn 3-5 recibos: ${r.penalidad_2_churn_3_5_pct ? Number(r.penalidad_2_churn_3_5_pct).toFixed(2) + '%' : 'N/A'}\n`;
+                resultado += `  • Umbral: ${r.penalidad_2_umbral || 0} altas\n`;
+                resultado += `  • Altas penalizadas: ${r.penalidad_2_altas_penalizadas || 0}\n`;
+                resultado += `  • 💰 Monto penalidad: S/ ${Number(r.penalidad_2_monto || 0).toFixed(2)}`;
+              } else if (corte === 4 && r.penalidad_3_monto !== undefined) {
+                resultado += `Penalidad 3 (Corte 4):\n`;
+                resultado += `  • Churn 2-5 recibos: ${r.penalidad_3_churn_2_5_pct ? Number(r.penalidad_3_churn_2_5_pct).toFixed(2) + '%' : 'N/A'}\n`;
+                resultado += `  • Umbral: ${r.penalidad_3_umbral || 0} altas\n`;
+                resultado += `  • Altas penalizadas: ${r.penalidad_3_altas_penalizadas || 0}\n`;
+                resultado += `  • 💰 Monto penalidad: S/ ${Number(r.penalidad_3_monto || 0).toFixed(2)}`;
+              } else {
+                resultado += `No hay datos de penalidad en el corte ${corte} para esta agencia.`;
+              }
+              break;
+              
+            case 'clawback':
+              resultado = `🔄 CLAWBACK - ${r.agencia}\n`;
+              resultado += `📅 Periodo: ${mesNombre} ${String(r.periodo).substring(0, 4)}\n\n`;
+              
+              if (corte === 2 && r.clawback_1_monto !== undefined) {
+                resultado += `Clawback 1 (Corte 2):\n`;
+                resultado += `  • Umbral corte 2: ${r.clawback_1_umbral_corte_2 || 0}\n`;
+                resultado += `  • % Cumplimiento: ${r.clawback_1_cumplimiento_pct ? Number(r.clawback_1_cumplimiento_pct).toFixed(2) + '%' : 'N/A'}\n`;
+                resultado += `  • Multiplicador: x${r.clawback_1_multiplicador || 0}\n`;
+                resultado += `  • 💰 Monto clawback: S/ ${Number(r.clawback_1_monto || 0).toFixed(2)}`;
+              } else if (corte === 3 && r.clawback_2_monto !== undefined) {
+                resultado += `Clawback 2 (Corte 3):\n`;
+                resultado += `  • 💰 Monto clawback: S/ ${Number(r.clawback_2_monto || 0).toFixed(2)}`;
+              } else if (corte === 4 && r.clawback_3_monto !== undefined) {
+                resultado += `Clawback 3 (Corte 4):\n`;
+                resultado += `  • 💰 Monto clawback: S/ ${Number(r.clawback_3_monto || 0).toFixed(2)}`;
+              } else {
+                resultado += `No hay datos de clawback en el corte ${corte} para esta agencia.`;
+              }
+              break;
+              
+            case 'comision':
+              resultado = `💵 COMISIÓN - ${r.agencia}\n`;
+              resultado += `📅 Periodo: ${mesNombre} ${String(r.periodo).substring(0, 4)} - Corte ${corte}\n\n`;
+              resultado += `  • Altas: ${r.altas}\n`;
+              resultado += `  • Meta: ${r.meta || '-'}\n`;
+              resultado += `  • % Cumplimiento: ${r.porcentaje_cumplimiento ? Number(r.porcentaje_cumplimiento).toFixed(1) + '%' : '-'}\n`;
+              resultado += `  • Multiplicador: x${r.multiplicador_final}\n`;
+              
+              if (corte === 1) {
+                resultado += `  • 💰 Total comisión Corte 1: S/ ${Number(r.total_a_pagar_corte_1 || 0).toFixed(2)}`;
+              } else if (corte === 2) {
+                resultado += `  • Comisión total: S/ ${Number(r.comision_total || 0).toFixed(2)}\n`;
+                resultado += `  • Ya pagado en Corte 1: S/ ${Number(r.pago_corte_1 || 0).toFixed(2)}\n`;
+                resultado += `  • 💰 Total a pagar Corte 2: S/ ${Number(r.total_a_pagar_corte_2 || 0).toFixed(2)}`;
+              }
+              break;
+              
+            case 'altas':
+              resultado = `📈 ALTAS - ${r.agencia}\n`;
+              resultado += `📅 Periodo: ${mesNombre} ${String(r.periodo).substring(0, 4)}\n\n`;
+              resultado += `  • Total altas: ${r.altas}\n`;
+              resultado += `  • Corte 1: ${r.corte_1 || 0}\n`;
+              resultado += `  • Corte 2: ${r.corte_2 || 0}\n`;
+              resultado += `  • Corte 3: ${r.corte_3 || 0}\n`;
+              resultado += `  • Corte 4: ${r.corte_4 || 0}\n`;
+              resultado += `  • Meta: ${r.meta || '-'}\n`;
+              resultado += `  • % Cumplimiento: ${r.porcentaje_cumplimiento ? Number(r.porcentaje_cumplimiento).toFixed(1) + '%' : '-'}`;
+              break;
+              
+            default: // detalle
+              resultado = `📊 ${r.agencia}\n`;
+              resultado += `📅 Periodo: ${mesNombre} ${String(r.periodo).substring(0, 4)} - Corte ${corte}\n`;
+              resultado += `🏷️ Categoría: ${r.top || 'REGULAR'} | Zona: ${r.zona}\n\n`;
+              resultado += `  • Altas: ${r.altas}\n`;
+              resultado += `  • Meta: ${r.meta || '-'}\n`;
+              resultado += `  • % Cumplimiento: ${r.porcentaje_cumplimiento ? Number(r.porcentaje_cumplimiento).toFixed(1) + '%' : '-'}\n`;
+              resultado += `  • Multiplicador: x${r.multiplicador_final}`;
+              
+              if (corte === 1) {
+                resultado += `\n  • 💰 Total Corte 1: S/ ${Number(r.total_a_pagar_corte_1 || 0).toFixed(2)}`;
+              } else if (corte === 2) {
+                resultado += `\n  • Comisión total: S/ ${Number(r.comision_total || 0).toFixed(2)}`;
+                resultado += `\n  • 💰 Total Corte 2: S/ ${Number(r.total_a_pagar_corte_2 || 0).toFixed(2)}`;
+                if (r.penalidad_1_monto) resultado += `\n  • ⚠️ Penalidad 1: S/ ${Number(r.penalidad_1_monto).toFixed(2)}`;
+                if (r.clawback_1_monto) resultado += `\n  • 🔄 Clawback 1: S/ ${Number(r.clawback_1_monto).toFixed(2)}`;
+              }
           }
           
           return resultado;
-        }).join('\n\n');
+        }).join('\n\n---\n\n');
 
-        const finalResponse = `📊 **Resultados encontrados:**\n\n${resultados}`;
+        const tipoEmoji = tipo_consulta === 'penalidad' ? '⚠️' : 
+                         tipo_consulta === 'clawback' ? '🔄' : 
+                         tipo_consulta === 'comision' ? '💵' : 
+                         tipo_consulta === 'altas' ? '📈' : '📊';
+        
+        const finalResponse = `${tipoEmoji} Resultados encontrados:\n\n${resultados}`;
 
         return NextResponse.json({
           response: finalResponse,
