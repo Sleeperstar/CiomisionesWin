@@ -118,33 +118,36 @@ ${dbSchema}
 INSTRUCCIONES:
 1. Analiza la pregunta del usuario y determina qué tipo de consulta es:
    - COMISIÓN: Si pregunta cuánto ganó, comisionó, total a pagar → tipo_consulta = "comision"
-   - PENALIDAD: Si pregunta por penalidad, descuento por churn → tipo_consulta = "penalidad"
+   - PENALIDAD TOTAL: Si pregunta por penalidad SIN especificar corte → tipo_consulta = "penalidad_total" (sumará penalidades de corte 2+3+4)
+   - PENALIDAD ESPECÍFICA: Si pregunta por penalidad DE UN CORTE ESPECÍFICO → tipo_consulta = "penalidad" + corte = X
    - CLAWBACK: Si pregunta por clawback, devolución → tipo_consulta = "clawback"
    - ALTAS: Si pregunta por altas, instalaciones → tipo_consulta = "altas"
    - GENERAL: Si quiere ver todo el detalle → tipo_consulta = "detalle"
 2. Convierte nombres de meses en español a formato YYYYMM (ejemplo: "agosto 2025" -> 202508, "agosto" sin año -> 202508 asumiendo 2025)
 3. Busca por nombre de agencia de manera flexible (ignora mayúsculas/minúsculas)
-4. IMPORTANTE: Las penalidades están en los cortes 2, 3 y 4:
-   - Penalidad 1 está en resultado_comisiones_corte_2 (campo penalidad_1_monto)
-   - Penalidad 2 está en resultado_comisiones_corte_3 (campo penalidad_2_monto)
-   - Penalidad 3 está en resultado_comisiones_corte_4 (campo penalidad_3_monto)
-5. Si preguntan por penalidad sin especificar número, busca en corte 2 primero (penalidad 1)
-6. Responde de manera clara y concisa en español
-7. NO uses asteriscos para negritas ni formato markdown, usa texto plano
-8. Usa emojis para hacer la respuesta más visual
+4. IMPORTANTE para PENALIDADES:
+   - Si NO especifica corte: usar tipo_consulta = "penalidad_total" → suma automática de todas las penalidades
+   - Si SÍ especifica corte: usar tipo_consulta = "penalidad" + corte correspondiente
+   - Penalidad 1 está en corte 2, Penalidad 2 está en corte 3, Penalidad 3 está en corte 4
+5. Responde de manera clara y concisa en español
+6. NO uses asteriscos para negritas ni formato markdown, usa texto plano
+7. Usa emojis para hacer la respuesta más visual
 
 EJEMPLOS:
 Pregunta: "Cuánto comisionó ALIV en agosto corte 1?"
 -> tipo_consulta = "comision", corte = 1
--> Responder: "📊 ALIV TELECOM S.A.C. comisionó S/ X,XXX.XX en agosto 2025, corte 1"
 
 Pregunta: "Cuál fue la penalidad de ALIV en agosto?"
--> tipo_consulta = "penalidad", corte = 2 (donde está penalidad 1)
--> Responder: "⚠️ ALIV TELECOM S.A.C. tuvo una penalidad de S/ X,XXX.XX en agosto 2025"
+-> tipo_consulta = "penalidad_total" (SIN corte, sumará todas las penalidades)
+
+Pregunta: "Cuál fue la penalidad de ALIV en agosto del corte 2?"
+-> tipo_consulta = "penalidad", corte = 2 (solo penalidad 1)
+
+Pregunta: "Cuál fue la penalidad de ALIV en agosto del corte 3?"
+-> tipo_consulta = "penalidad", corte = 3 (solo penalidad 2)
 
 Pregunta: "Cuántas altas tuvo EXPORTEL en abril?"
--> tipo_consulta = "altas"
--> Responder: "📈 EXPORTEL S.A.C. tuvo XXX altas en abril 2025"`,
+-> tipo_consulta = "altas"`,
       },
       ...conversationHistory,
       {
@@ -184,8 +187,8 @@ Pregunta: "Cuántas altas tuvo EXPORTEL en abril?"
               },
               tipo_consulta: {
                 type: 'string',
-                enum: ['comision', 'penalidad', 'clawback', 'altas', 'detalle'],
-                description: 'Tipo de información solicitada: comision (total a pagar), penalidad (descuento por churn), clawback (devolución), altas (instalaciones), detalle (todo)',
+                enum: ['comision', 'penalidad', 'penalidad_total', 'clawback', 'altas', 'detalle'],
+                description: 'Tipo de información solicitada: comision (total a pagar), penalidad_total (suma de TODAS las penalidades de corte 2+3+4, usar cuando NO especifica corte), penalidad (penalidad de un corte específico, usar cuando SÍ especifica corte), clawback (devolución), altas (instalaciones), detalle (todo)',
               },
             },
             required: ['agencia', 'periodo', 'tipo_consulta'],
@@ -205,10 +208,144 @@ Pregunta: "Cuántas altas tuvo EXPORTEL en abril?"
       if (functionName === 'buscar_comisiones') {
         const { agencia, periodo, zona, tipo_consulta = 'detalle' } = functionArgs;
         
-        // Determinar el corte según el tipo de consulta
+        // Caso especial: penalidad_total necesita consultar múltiples tablas
+        if (tipo_consulta === 'penalidad_total') {
+          // Consultar las 3 tablas de cortes que tienen penalidades
+          const [dataCorte2, dataCorte3, dataCorte4] = await Promise.all([
+            supabase.from('resultado_comisiones_corte_2').select('*').eq('periodo', periodo).ilike('agencia', `%${agencia}%`),
+            supabase.from('resultado_comisiones_corte_3').select('*').eq('periodo', periodo).ilike('agencia', `%${agencia}%`),
+            supabase.from('resultado_comisiones_corte_4').select('*').eq('periodo', periodo).ilike('agencia', `%${agencia}%`),
+          ]);
+
+          // Verificar errores
+          if (dataCorte2.error || dataCorte3.error || dataCorte4.error) {
+            return NextResponse.json({
+              response: `Lo siento, hubo un error al buscar las penalidades.`,
+              conversationHistory: [...conversationHistory, { role: 'user', content: message }, { role: 'assistant', content: 'Error en consulta' }],
+            });
+          }
+
+          // Combinar datos por agencia/ruc
+          const penalidades: { [key: string]: any } = {};
+          
+          // Procesar corte 2 (penalidad 1)
+          (dataCorte2.data || []).forEach(r => {
+            const key = `${r.ruc}_${r.zona}`;
+            if (!penalidades[key]) {
+              penalidades[key] = { 
+                agencia: r.agencia, ruc: r.ruc, zona: r.zona, periodo: r.periodo,
+                penalidad_1: 0, penalidad_2: 0, penalidad_3: 0,
+                detalle_p1: null, detalle_p2: null, detalle_p3: null
+              };
+            }
+            penalidades[key].penalidad_1 = Number(r.penalidad_1_monto || 0);
+            penalidades[key].detalle_p1 = {
+              churn: r.penalidad_1_churn_4_5_pct,
+              umbral: r.penalidad_1_umbral,
+              altas_penalizadas: r.penalidad_1_altas_penalizadas,
+              monto: r.penalidad_1_monto
+            };
+          });
+
+          // Procesar corte 3 (penalidad 2)
+          (dataCorte3.data || []).forEach(r => {
+            const key = `${r.ruc}_${r.zona}`;
+            if (!penalidades[key]) {
+              penalidades[key] = { 
+                agencia: r.agencia, ruc: r.ruc, zona: r.zona, periodo: r.periodo,
+                penalidad_1: 0, penalidad_2: 0, penalidad_3: 0,
+                detalle_p1: null, detalle_p2: null, detalle_p3: null
+              };
+            }
+            penalidades[key].penalidad_2 = Number(r.penalidad_2_monto || 0);
+            penalidades[key].detalle_p2 = {
+              churn: r.penalidad_2_churn_3_5_pct,
+              umbral: r.penalidad_2_umbral,
+              altas_penalizadas: r.penalidad_2_altas_penalizadas,
+              monto: r.penalidad_2_monto
+            };
+          });
+
+          // Procesar corte 4 (penalidad 3)
+          (dataCorte4.data || []).forEach(r => {
+            const key = `${r.ruc}_${r.zona}`;
+            if (!penalidades[key]) {
+              penalidades[key] = { 
+                agencia: r.agencia, ruc: r.ruc, zona: r.zona, periodo: r.periodo,
+                penalidad_1: 0, penalidad_2: 0, penalidad_3: 0,
+                detalle_p1: null, detalle_p2: null, detalle_p3: null
+              };
+            }
+            penalidades[key].penalidad_3 = Number(r.penalidad_3_monto || 0);
+            penalidades[key].detalle_p3 = {
+              churn: r.penalidad_3_churn_2_5_pct,
+              umbral: r.penalidad_3_umbral,
+              altas_penalizadas: r.penalidad_3_altas_penalizadas,
+              monto: r.penalidad_3_monto
+            };
+          });
+
+          const agenciasConPenalidad = Object.values(penalidades);
+          
+          if (agenciasConPenalidad.length === 0) {
+            return NextResponse.json({
+              response: `No encontré registros de penalidades para "${agencia}" en el periodo ${periodo}. Verifica que existan datos guardados en los cortes 2, 3 o 4.`,
+              conversationHistory: [...conversationHistory, { role: 'user', content: message }, { role: 'assistant', content: 'No se encontraron datos' }],
+            });
+          }
+
+          // Formatear respuesta con todas las penalidades
+          const resultados = agenciasConPenalidad.map((p: any) => {
+            const mesNombre = obtenerNombreMes(Number(String(p.periodo).substring(4, 6)));
+            const totalPenalidad = p.penalidad_1 + p.penalidad_2 + p.penalidad_3;
+            
+            let resultado = `⚠️ PENALIDADES TOTALES - ${p.agencia}\n`;
+            resultado += `📅 Periodo: ${mesNombre} ${String(p.periodo).substring(0, 4)} | Zona: ${p.zona}\n\n`;
+            
+            if (p.penalidad_1 > 0) {
+              resultado += `  Penalidad 1 (Corte 2): S/ ${p.penalidad_1.toFixed(2)}\n`;
+              if (p.detalle_p1) {
+                resultado += `    → Altas penalizadas: ${p.detalle_p1.altas_penalizadas || 0}\n`;
+              }
+            } else {
+              resultado += `  Penalidad 1 (Corte 2): S/ 0.00 (sin datos)\n`;
+            }
+            
+            if (p.penalidad_2 > 0) {
+              resultado += `  Penalidad 2 (Corte 3): S/ ${p.penalidad_2.toFixed(2)}\n`;
+              if (p.detalle_p2) {
+                resultado += `    → Altas penalizadas: ${p.detalle_p2.altas_penalizadas || 0}\n`;
+              }
+            } else {
+              resultado += `  Penalidad 2 (Corte 3): S/ 0.00 (sin datos)\n`;
+            }
+            
+            if (p.penalidad_3 > 0) {
+              resultado += `  Penalidad 3 (Corte 4): S/ ${p.penalidad_3.toFixed(2)}\n`;
+              if (p.detalle_p3) {
+                resultado += `    → Altas penalizadas: ${p.detalle_p3.altas_penalizadas || 0}\n`;
+              }
+            } else {
+              resultado += `  Penalidad 3 (Corte 4): S/ 0.00 (sin datos)\n`;
+            }
+            
+            resultado += `\n  💰 TOTAL PENALIDADES: S/ ${totalPenalidad.toFixed(2)}`;
+            
+            return resultado;
+          }).join('\n\n---\n\n');
+
+          const finalResponse = `⚠️ Resultados de penalidades:\n\n${resultados}`;
+
+          return NextResponse.json({
+            response: finalResponse,
+            conversationHistory: [...conversationHistory, { role: 'user', content: message }, { role: 'assistant', content: finalResponse }],
+          });
+        }
+
+        // Determinar el corte según el tipo de consulta (para consultas normales)
         let corte = functionArgs.corte || 1;
         
-        // Si piden penalidad sin especificar corte, buscar en corte 2 (penalidad 1)
+        // Si piden penalidad específica sin especificar corte, usar corte 2
         if (tipo_consulta === 'penalidad' && !functionArgs.corte) {
           corte = 2;
         }

@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, Loader2 } from 'lucide-react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { Send, Bot, User, Loader2, Mic, MicOff, Volume2, VolumeX } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -37,16 +37,64 @@ function renderLine(line: string): React.ReactNode {
   );
 }
 
+// Declaración para TypeScript del Web Speech API
+interface SpeechRecognitionEvent extends Event {
+  results: SpeechRecognitionResultList;
+  resultIndex: number;
+}
+
+interface SpeechRecognitionResultList {
+  length: number;
+  item(index: number): SpeechRecognitionResult;
+  [index: number]: SpeechRecognitionResult;
+}
+
+interface SpeechRecognitionResult {
+  length: number;
+  item(index: number): SpeechRecognitionAlternative;
+  [index: number]: SpeechRecognitionAlternative;
+  isFinal: boolean;
+}
+
+interface SpeechRecognitionAlternative {
+  transcript: string;
+  confidence: number;
+}
+
+interface SpeechRecognition extends EventTarget {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  start(): void;
+  stop(): void;
+  abort(): void;
+  onresult: ((event: SpeechRecognitionEvent) => void) | null;
+  onerror: ((event: Event) => void) | null;
+  onend: (() => void) | null;
+  onstart: (() => void) | null;
+}
+
+declare global {
+  interface Window {
+    SpeechRecognition: new () => SpeechRecognition;
+    webkitSpeechRecognition: new () => SpeechRecognition;
+  }
+}
+
 export default function ChatbotInterface() {
   const [messages, setMessages] = useState<Message[]>([
     {
       role: 'assistant',
-      content: '¡Hola! Soy el asistente de comisiones de Win Telecom. Puedo ayudarte a consultar información sobre comisiones, ventas y agencias. ¿En qué puedo ayudarte hoy?',
+      content: '¡Hola! Soy el asistente de comisiones de Win Telecom. Puedo ayudarte a consultar información sobre comisiones, ventas y agencias. ¿En qué puedo ayudarte hoy? 🎤 También puedes hablarme usando el micrófono.',
     },
   ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [autoSpeak, setAutoSpeak] = useState(false);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const recognitionRef = useRef<SpeechRecognition | null>(null);
   const { toast } = useToast();
 
   // Auto-scroll al último mensaje
@@ -58,6 +106,128 @@ export default function ChatbotInterface() {
       }
     }
   }, [messages]);
+
+  // Inicializar reconocimiento de voz
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (SpeechRecognitionAPI) {
+        recognitionRef.current = new SpeechRecognitionAPI();
+        recognitionRef.current.continuous = false;
+        recognitionRef.current.interimResults = true;
+        recognitionRef.current.lang = 'es-ES';
+
+        recognitionRef.current.onresult = (event: SpeechRecognitionEvent) => {
+          const transcript = Array.from(event.results)
+            .map(result => result[0].transcript)
+            .join('');
+          
+          setInput(transcript);
+          
+          // Si es resultado final, enviar automáticamente
+          if (event.results[event.results.length - 1].isFinal) {
+            setIsListening(false);
+          }
+        };
+
+        recognitionRef.current.onerror = () => {
+          setIsListening(false);
+          toast({
+            title: "Error de micrófono",
+            description: "No se pudo acceder al micrófono. Verifica los permisos.",
+            variant: "destructive",
+          });
+        };
+
+        recognitionRef.current.onend = () => {
+          setIsListening(false);
+        };
+      }
+    }
+
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.abort();
+      }
+      // Cancelar cualquier síntesis de voz al desmontar
+      if (typeof window !== 'undefined' && window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+      }
+    };
+  }, [toast]);
+
+  // Función para iniciar/detener reconocimiento de voz
+  const toggleListening = useCallback(() => {
+    if (!recognitionRef.current) {
+      toast({
+        title: "No disponible",
+        description: "Tu navegador no soporta reconocimiento de voz.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (isListening) {
+      recognitionRef.current.stop();
+      setIsListening(false);
+    } else {
+      setInput('');
+      recognitionRef.current.start();
+      setIsListening(true);
+    }
+  }, [isListening, toast]);
+
+  // Función para leer texto en voz alta
+  const speakText = useCallback((text: string) => {
+    if (typeof window === 'undefined' || !window.speechSynthesis) {
+      toast({
+        title: "No disponible",
+        description: "Tu navegador no soporta síntesis de voz.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Cancelar cualquier síntesis anterior
+    window.speechSynthesis.cancel();
+
+    // Limpiar el texto de emojis y caracteres especiales para mejor lectura
+    const cleanText = text
+      .replace(/[📊📅📈💵💰⚠️🔄🏷️🎤]/g, '')
+      .replace(/---/g, '')
+      .replace(/S\//g, 'soles ')
+      .replace(/x(\d)/g, 'por $1')
+      .replace(/%/g, ' por ciento')
+      .replace(/\n+/g, '. ')
+      .replace(/•/g, ', ')
+      .trim();
+
+    const utterance = new SpeechSynthesisUtterance(cleanText);
+    utterance.lang = 'es-ES';
+    utterance.rate = 1.0;
+    utterance.pitch = 1.0;
+
+    // Buscar una voz en español
+    const voices = window.speechSynthesis.getVoices();
+    const spanishVoice = voices.find(voice => voice.lang.startsWith('es'));
+    if (spanishVoice) {
+      utterance.voice = spanishVoice;
+    }
+
+    utterance.onstart = () => setIsSpeaking(true);
+    utterance.onend = () => setIsSpeaking(false);
+    utterance.onerror = () => setIsSpeaking(false);
+
+    window.speechSynthesis.speak(utterance);
+  }, [toast]);
+
+  // Detener la síntesis de voz
+  const stopSpeaking = useCallback(() => {
+    if (typeof window !== 'undefined' && window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+      setIsSpeaking(false);
+    }
+  }, []);
 
   const handleSendMessage = async () => {
     if (!input.trim()) return;
@@ -95,6 +265,11 @@ export default function ChatbotInterface() {
       };
 
       setMessages(prev => [...prev, assistantMessage]);
+      
+      // Si autoSpeak está activado, leer la respuesta
+      if (autoSpeak) {
+        setTimeout(() => speakText(data.response), 500);
+      }
 
     } catch (error) {
       console.error('Error:', error);
@@ -171,6 +346,21 @@ export default function ChatbotInterface() {
                       </React.Fragment>
                     ))}
                   </div>
+                  {/* Botón para leer mensaje del asistente */}
+                  {message.role === 'assistant' && (
+                    <div className="mt-2 pt-2 border-t border-slate-200 dark:border-slate-600 flex justify-end">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => speakText(message.content)}
+                        disabled={isSpeaking}
+                        className="text-xs text-slate-500 hover:text-[#f53c00]"
+                      >
+                        <Volume2 className="h-3 w-3 mr-1" />
+                        {isSpeaking ? 'Leyendo...' : 'Escuchar'}
+                      </Button>
+                    </div>
+                  )}
                 </div>
 
                 {message.role === 'user' && (
@@ -203,15 +393,55 @@ export default function ChatbotInterface() {
 
         {/* Área de input */}
         <div className="border-t bg-white dark:bg-slate-900 p-4">
+          {/* Controles de voz */}
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setAutoSpeak(!autoSpeak)}
+                className={`text-xs ${autoSpeak ? 'bg-green-100 border-green-500 text-green-700' : ''}`}
+              >
+                {autoSpeak ? <Volume2 className="h-4 w-4 mr-1" /> : <VolumeX className="h-4 w-4 mr-1" />}
+                {autoSpeak ? 'Voz ON' : 'Voz OFF'}
+              </Button>
+              {isSpeaking && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={stopSpeaking}
+                  className="text-xs text-red-600 border-red-300"
+                >
+                  <VolumeX className="h-4 w-4 mr-1" />
+                  Detener
+                </Button>
+              )}
+            </div>
+            {isListening && (
+              <div className="flex items-center gap-2 text-sm text-red-600">
+                <div className="w-2 h-2 bg-red-600 rounded-full animate-pulse" />
+                Escuchando...
+              </div>
+            )}
+          </div>
+          
           <div className="flex gap-2">
             <Input
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyPress={handleKeyPress}
-              placeholder="Escribe tu pregunta... (ej: ¿Cuánto comisionó ALIV en agosto?)"
-              disabled={loading}
-              className="flex-1 border-slate-300 dark:border-slate-600 focus-visible:ring-[#f53c00]"
+              placeholder={isListening ? "Habla ahora..." : "Escribe tu pregunta o usa el micrófono 🎤"}
+              disabled={loading || isListening}
+              className={`flex-1 border-slate-300 dark:border-slate-600 focus-visible:ring-[#f53c00] ${isListening ? 'bg-red-50 border-red-300' : ''}`}
             />
+            <Button
+              onClick={toggleListening}
+              disabled={loading}
+              variant="outline"
+              className={`px-3 ${isListening ? 'bg-red-100 border-red-500 text-red-600 animate-pulse' : 'border-[#ff8300] text-[#f53c00] hover:bg-orange-50'}`}
+            >
+              {isListening ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
+            </Button>
             <Button
               onClick={handleSendMessage}
               disabled={loading || !input.trim()}
