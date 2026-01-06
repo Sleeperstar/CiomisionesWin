@@ -7,6 +7,7 @@ import UploadParameters from "@/components/commissions/upload-parameters";
 import TableAnalysis from "@/components/commissions/table-analysis";
 import BaseCalculo from "@/components/commissions/base-calculo";
 import ResultadoComision from "@/components/commissions/resultado-comision";
+import ResultadoComisionCorte2 from "@/components/commissions/resultado-comision-corte-2";
 
 // Helper to format the title from slug
 function formatTitle(slug: string) {
@@ -20,8 +21,8 @@ function formatTitle(slug: string) {
 export default function CommissionCalculationPage({ params }: { params: { corte: string; zona: string; mes: string } }) {
   const { corte, zona, mes } = params;
 
-  // As per your request, only "Corte 1" and "Lima" are currently implemented.
-  const isImplemented = corte === 'corte-1' && zona === 'lima';
+  // Corte 1 y Corte 2 están implementados para Lima
+  const isImplemented = (corte === 'corte-1' || corte === 'corte-2') && zona === 'lima';
   const tabTitle = `Base ${formatTitle(corte)} - ${formatTitle(zona)} - ${formatTitle(mes)}`;
 
   return (
@@ -76,7 +77,17 @@ export default function CommissionCalculationPage({ params }: { params: { corte:
           </TabsContent>
 
           <TabsContent value="resultado_comision">
-            <ResultadoComision corte={corte} zona={zona} mes={mes} />
+            {corte === 'corte-1' ? (
+              <ResultadoComision corte={corte} zona={zona} mes={mes} />
+            ) : corte === 'corte-2' ? (
+              <ResultadoComisionCorte2 zona={zona} mes={mes} />
+            ) : (
+              <Card>
+                <CardContent className="py-8 text-center text-muted-foreground">
+                  Componente para {formatTitle(corte)} no implementado aún.
+                </CardContent>
+              </Card>
+            )}
           </TabsContent>
         </Tabs>
       ) : (

@@ -284,6 +284,16 @@ COMMENT ON FUNCTION get_comisiones_resumen(TEXT, INTEGER, INTEGER, INTEGER) IS
 - Total a Pagar usa multiplicador_final';
 
 -- ============================================================================
+-- FUNCIÓN RPC: get_comisiones_corte_2
+-- Calcula comisiones del Corte 2 con validación contra Corte 1 guardado
+-- Incluye: Penalidad 1 (churn 4.5%) y Clawback 1
+-- ============================================================================
+-- Parámetros: p_zona TEXT, p_mes INTEGER, p_year INTEGER DEFAULT 2025
+-- Retorna tabla con campos de validación, datos base, comisiones, penalidad y clawback
+-- Nota: Requiere que el Corte 1 esté guardado en resultado_comisiones_corte_1
+-- ============================================================================
+
+-- ============================================================================
 -- TABLAS DE RESULTADOS POR CORTE
 -- ============================================================================
 -- Cada corte tiene su propia tabla porque:
