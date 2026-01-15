@@ -27,6 +27,7 @@ const navItems = [
   { href: "/smart-validation", label: "Validación Inteligente", icon: Icons.SmartValidation },
   { href: "/chatbot", label: "Chatbot IA", icon: Icons.ChatBot },
   { href: "/commissions", label: "Calcular Comisiones", icon: Icons.Analytics },
+  { href: "/view-results", label: "Visualizar Resultados", icon: Icons.ViewResults },
   { href: "/settings", label: "Configuración", icon: Icons.Settings },
 ];
 

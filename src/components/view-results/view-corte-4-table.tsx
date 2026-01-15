@@ -1,0 +1,233 @@
+"use client";
+
+import React, { useState, useEffect, useMemo } from 'react';
+import { ArrowUpDown, Download } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { supabase } from '@/lib/supabase';
+import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { useToast } from "@/hooks/use-toast";
+import { Icons } from "@/components/icons";
+import { Badge } from "@/components/ui/badge";
+import * as XLSX from 'xlsx';
+
+interface Corte4Data {
+    id: number;
+    ruc: string;
+    agencia: string;
+    meta: number | null;
+    top: string;
+    altas: number;
+    corte_1: number;
+    corte_2: number;
+    corte_3: number;
+    corte_4: number;
+    segundo_recibo_pagado: number;
+    tercer_recibo_pagado: number;
+    recibos_no_pagados_corte_4: number;
+    multiplicador_final: number;
+    penalidad_3_churn_2_5_pct: number;
+    penalidad_3_umbral: number;
+    penalidad_3_altas_penalizadas: number;
+    penalidad_3_monto: number;
+    clawback_3_umbral_corte_4: number;
+    clawback_3_cumplimiento_pct: number;
+    clawback_3_multiplicador: number;
+    clawback_3_monto: number;
+}
+
+interface Props {
+    zona: string;
+    mes: string;
+    periodo: number;
+}
+
+export default function ViewCorte4Table({ zona, mes, periodo }: Props) {
+    const [data, setData] = useState<Corte4Data[]>([]);
+    const [loading, setLoading] = useState(true);
+    const { toast } = useToast();
+    const [sortConfig, setSortConfig] = useState<{ key: keyof Corte4Data; direction: 'ascending' | 'descending' } | null>(null);
+
+    const sortedData = useMemo(() => {
+        let sortableItems = [...data];
+        if (sortConfig !== null) {
+            sortableItems.sort((a, b) => {
+                const aValue = a[sortConfig.key];
+                const bValue = b[sortConfig.key];
+                if (aValue === null || bValue === null) return 0;
+                if (aValue < bValue) return sortConfig.direction === 'ascending' ? -1 : 1;
+                if (aValue > bValue) return sortConfig.direction === 'ascending' ? 1 : -1;
+                return 0;
+            });
+        }
+        return sortableItems;
+    }, [data, sortConfig]);
+
+    const requestSort = (key: keyof Corte4Data) => {
+        let direction: 'ascending' | 'descending' = 'ascending';
+        if (sortConfig && sortConfig.key === key && sortConfig.direction === 'ascending') {
+            direction = 'descending';
+        }
+        setSortConfig({ key, direction });
+    };
+
+    const handleDownload = () => {
+        if (data.length === 0) {
+            toast({ title: "Sin datos", description: "No hay datos para descargar.", variant: "destructive" });
+            return;
+        }
+
+        const exportData = data.map(row => ({
+            'RUC': row.ruc,
+            'AGENCIA': row.agencia,
+            'META': row.meta || '-',
+            'TOP': row.top,
+            'ALTAS': row.altas,
+            'CORTE_1': row.corte_1,
+            'CORTE_2': row.corte_2,
+            'CORTE_3': row.corte_3,
+            'CORTE_4': row.corte_4,
+            '2DO_RECIBO_PAGADO': row.segundo_recibo_pagado,
+            '3ER_RECIBO_PAGADO': row.tercer_recibo_pagado,
+            'NO_PAGADOS_C4': row.recibos_no_pagados_corte_4,
+            'MULT_FINAL': row.multiplicador_final,
+            'P3_CHURN_2.5%': row.penalidad_3_churn_2_5_pct,
+            'P3_UMBRAL': row.penalidad_3_umbral,
+            'P3_ALTAS_PENALIZADAS': row.penalidad_3_altas_penalizadas,
+            'P3_MONTO': row.penalidad_3_monto,
+            'CB3_UMBRAL': row.clawback_3_umbral_corte_4,
+            'CB3_CUMPL_%': row.clawback_3_cumplimiento_pct,
+            'CB3_MULT': row.clawback_3_multiplicador,
+            'CB3_MONTO': row.clawback_3_monto
+        }));
+
+        const ws = XLSX.utils.json_to_sheet(exportData);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Corte 4');
+        XLSX.writeFile(wb, `Corte4_${zona.toUpperCase()}_${mes}_${periodo}.xlsx`);
+
+        toast({ title: "✅ Descarga completada", description: `${data.length} registros exportados.` });
+    };
+
+    useEffect(() => {
+        const fetchData = async () => {
+            setLoading(true);
+            try {
+                const { data: result, error } = await supabase
+                    .from('resultado_comisiones_corte_4')
+                    .select('*')
+                    .eq('periodo', periodo)
+                    .eq('zona', zona.toUpperCase())
+                    .order('altas', { ascending: false });
+
+                if (error) throw error;
+                setData(result || []);
+            } catch (error) {
+                console.error('Error:', error);
+                toast({ title: "Error", description: "No se pudieron cargar los datos.", variant: "destructive" });
+            }
+            setLoading(false);
+        };
+        fetchData();
+    }, [periodo, zona, toast]);
+
+    const SortButton = ({ columnKey, children }: { columnKey: keyof Corte4Data; children: React.ReactNode }) => (
+        <Button variant="ghost" onClick={() => requestSort(columnKey)} className="h-7 px-2 hover:bg-green-200 font-semibold text-xs">
+            {children}
+            <ArrowUpDown className="ml-1 h-3 w-3" />
+        </Button>
+    );
+
+    const totalPenalidad = data.reduce((sum, r) => sum + (r.penalidad_3_monto || 0), 0);
+    const totalClawback = data.reduce((sum, r) => sum + (r.clawback_3_monto || 0), 0);
+
+    if (loading) {
+        return (
+            <Card className="border-0 shadow-lg">
+                <CardContent className="flex items-center justify-center py-20">
+                    <Icons.Spinner className="h-8 w-8 animate-spin text-green-500" />
+                    <span className="ml-3">Cargando Corte 4...</span>
+                </CardContent>
+            </Card>
+        );
+    }
+
+    return (
+        <Card className="border-0 shadow-lg bg-gradient-to-br from-white to-green-50/30 dark:from-slate-900 dark:to-slate-800 overflow-hidden">
+            <CardHeader className="pb-4 border-b text-white rounded-t-lg" style={{ background: 'linear-gradient(135deg, #059669 0%, #10b981 50%, #34d399 100%)' }}>
+                <div className="flex items-center justify-between flex-wrap gap-4">
+                    <div>
+                        <CardTitle className="text-xl font-bold">Corte 4 - Penalidad 3 + Clawback 3</CardTitle>
+                        <CardDescription className="text-green-100 mt-1">
+                            {data.length} agencias • Periodo {periodo}
+                        </CardDescription>
+                    </div>
+                    <div className="flex gap-2 items-center flex-wrap">
+                        <Badge className="bg-red-500/80 text-white text-sm py-1">
+                            Penalidad 3: S/ {totalPenalidad.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                        </Badge>
+                        <Badge className="bg-green-300/80 text-green-900 text-sm py-1">
+                            Clawback 3: S/ {totalClawback.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                        </Badge>
+                        <Button onClick={handleDownload} disabled={data.length === 0} className="bg-white/25 text-white border-white/40 hover:bg-white/40">
+                            <Download className="mr-2 h-4 w-4" />
+                            Descargar Excel
+                        </Button>
+                    </div>
+                </div>
+            </CardHeader>
+            <CardContent className="p-0">
+                <div className="overflow-auto max-h-[500px]">
+                    <Table className="text-xs">
+                        <TableHeader className="sticky top-0 bg-gradient-to-r from-green-100 to-emerald-100 dark:from-slate-800 dark:to-slate-700 z-10">
+                            <TableRow>
+                                <TableHead className="px-2 py-2"><SortButton columnKey="ruc">RUC</SortButton></TableHead>
+                                <TableHead className="px-2 py-2"><SortButton columnKey="agencia">AGENCIA</SortButton></TableHead>
+                                <TableHead className="px-2 py-2"><SortButton columnKey="altas">ALTAS</SortButton></TableHead>
+                                <TableHead className="px-2 py-2"><SortButton columnKey="segundo_recibo_pagado">2do REC.</SortButton></TableHead>
+                                <TableHead className="px-2 py-2"><SortButton columnKey="tercer_recibo_pagado">3er REC.</SortButton></TableHead>
+                                <TableHead className="px-2 py-2"><SortButton columnKey="recibos_no_pagados_corte_4">NO PAG.</SortButton></TableHead>
+                                <TableHead className="px-2 py-2 bg-red-50 dark:bg-red-900/20"><SortButton columnKey="penalidad_3_altas_penalizadas">P3 ALTAS</SortButton></TableHead>
+                                <TableHead className="px-2 py-2 bg-red-50 dark:bg-red-900/20"><SortButton columnKey="penalidad_3_monto">P3 MONTO</SortButton></TableHead>
+                                <TableHead className="px-2 py-2 bg-green-50 dark:bg-green-900/20"><SortButton columnKey="clawback_3_cumplimiento_pct">CB3 %</SortButton></TableHead>
+                                <TableHead className="px-2 py-2 bg-green-50 dark:bg-green-900/20"><SortButton columnKey="clawback_3_monto">CB3 MONTO</SortButton></TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {data.length === 0 && (
+                                <TableRow>
+                                    <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
+                                        No hay datos para este periodo y zona.
+                                    </TableCell>
+                                </TableRow>
+                            )}
+                            {sortedData.map((row, index) => (
+                                <TableRow key={row.id} className={index % 2 === 0 ? 'bg-white dark:bg-slate-900' : 'bg-green-50/50 dark:bg-slate-800/50'}>
+                                    <TableCell className="px-2 py-2 font-mono">{row.ruc}</TableCell>
+                                    <TableCell className="px-2 py-2 max-w-[120px] truncate" title={row.agencia}>{row.agencia}</TableCell>
+                                    <TableCell className="px-2 py-2 text-center font-bold text-green-600">{row.altas}</TableCell>
+                                    <TableCell className="px-2 py-2 text-center text-green-600">{row.segundo_recibo_pagado || 0}</TableCell>
+                                    <TableCell className="px-2 py-2 text-center text-green-600 font-semibold">{row.tercer_recibo_pagado || 0}</TableCell>
+                                    <TableCell className="px-2 py-2 text-center text-red-600 font-semibold">{row.recibos_no_pagados_corte_4 || 0}</TableCell>
+                                    <TableCell className="px-2 py-2 text-center bg-red-50/50 dark:bg-red-900/10 font-semibold">{row.penalidad_3_altas_penalizadas || 0}</TableCell>
+                                    <TableCell className="px-2 py-2 text-right bg-red-50/50 dark:bg-red-900/10 font-mono text-red-600">S/ {(row.penalidad_3_monto || 0).toLocaleString('es-PE', { minimumFractionDigits: 2 })}</TableCell>
+                                    <TableCell className="px-2 py-2 text-center bg-green-50/50 dark:bg-green-900/10">{(row.clawback_3_cumplimiento_pct || 0).toFixed(1)}%</TableCell>
+                                    <TableCell className="px-2 py-2 text-right bg-green-50/50 dark:bg-green-900/10 font-mono text-green-600">S/ {(row.clawback_3_monto || 0).toLocaleString('es-PE', { minimumFractionDigits: 2 })}</TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                        <TableFooter className="sticky bottom-0 bg-gradient-to-r from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-700">
+                            <TableRow className="font-bold">
+                                <TableCell colSpan={7}>TOTALES</TableCell>
+                                <TableCell className="text-right font-mono text-red-600">S/ {totalPenalidad.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</TableCell>
+                                <TableCell></TableCell>
+                                <TableCell className="text-right font-mono text-green-600">S/ {totalClawback.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</TableCell>
+                            </TableRow>
+                        </TableFooter>
+                    </Table>
+                </div>
+            </CardContent>
+        </Card>
+    );
+}
+

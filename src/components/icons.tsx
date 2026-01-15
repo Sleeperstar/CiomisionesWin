@@ -12,6 +12,8 @@ import {
   Save,     
   Loader,
   MessageSquare,
+  FileSearch,
+  Download,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -25,7 +27,9 @@ export const Icons = {
   ChatBot: MessageSquare,
   Settings: Settings,
   Analytics: BarChart,
+  ViewResults: FileSearch,
   Save: Save,
+  Download: Download,
   ChevronLeft,
   ChevronRight,
   Moon,
