@@ -10,6 +10,8 @@ import ViewCorte1Table from "@/components/view-results/view-corte-1-table";
 import ViewCorte2Table from "@/components/view-results/view-corte-2-table";
 import ViewCorte3Table from "@/components/view-results/view-corte-3-table";
 import ViewCorte4Table from "@/components/view-results/view-corte-4-table";
+import ViewResultadosFinalesTable from "@/components/view-results/view-resultados-finales-table";
+import { DollarSign } from "lucide-react";
 
 const monthMap: { [key: string]: number } = {
   enero: 1, febrero: 2, marzo: 3, abril: 4, mayo: 5, junio: 6,
@@ -26,12 +28,13 @@ interface CorteCounts {
   corte2: number;
   corte3: number;
   corte4: number;
+  finales: number;
 }
 
 export default function ViewResultsPage({ params }: { params: { zona: string; year: string; mes: string } }) {
   const { zona, year, mes } = params;
   const { toast } = useToast();
-  const [counts, setCounts] = useState<CorteCounts>({ corte1: 0, corte2: 0, corte3: 0, corte4: 0 });
+  const [counts, setCounts] = useState<CorteCounts>({ corte1: 0, corte2: 0, corte3: 0, corte4: 0, finales: 0 });
   const [loading, setLoading] = useState(true);
 
   const monthNumber = monthMap[mes];
@@ -43,7 +46,7 @@ export default function ViewResultsPage({ params }: { params: { zona: string; ye
       setLoading(true);
       try {
         // Contar registros en cada tabla
-        const [c1, c2, c3, c4] = await Promise.all([
+        const [c1, c2, c3, c4, cFinales] = await Promise.all([
           supabase.from('resultado_comisiones_corte_1').select('id', { count: 'exact', head: true })
             .eq('periodo', periodo).eq('zona', zona.toUpperCase()),
           supabase.from('resultado_comisiones_corte_2').select('id', { count: 'exact', head: true })
@@ -52,6 +55,9 @@ export default function ViewResultsPage({ params }: { params: { zona: string; ye
             .eq('periodo', periodo).eq('zona', zona.toUpperCase()),
           supabase.from('resultado_comisiones_corte_4').select('id', { count: 'exact', head: true })
             .eq('periodo', periodo).eq('zona', zona.toUpperCase()),
+          // Resultados finales (vista consolidada)
+          supabase.from('resultados_finales').select('ruc', { count: 'exact', head: true })
+            .eq('periodo', periodo).eq('zona', zona.toUpperCase()),
         ]);
 
         setCounts({
@@ -59,6 +65,7 @@ export default function ViewResultsPage({ params }: { params: { zona: string; ye
           corte2: c2.count || 0,
           corte3: c3.count || 0,
           corte4: c4.count || 0,
+          finales: cFinales.count || 0,
         });
       } catch (error) {
         console.error('Error fetching counts:', error);
@@ -94,7 +101,7 @@ export default function ViewResultsPage({ params }: { params: { zona: string; ye
       </div>
 
       <Tabs defaultValue="corte-1" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-4 h-auto">
+        <TabsList className="grid w-full grid-cols-5 h-auto">
           <TabsTrigger value="corte-1" className="flex flex-col py-3 data-[state=active]:bg-orange-100 data-[state=active]:text-orange-900">
             <span className="font-semibold">Corte 1</span>
             <Badge variant="secondary" className="mt-1">
@@ -113,10 +120,19 @@ export default function ViewResultsPage({ params }: { params: { zona: string; ye
               {loading ? '...' : `${counts.corte3} registros`}
             </Badge>
           </TabsTrigger>
-          <TabsTrigger value="corte-4" className="flex flex-col py-3 data-[state=active]:bg-green-100 data-[state=active]:text-green-900">
+          <TabsTrigger value="corte-4" className="flex flex-col py-3 data-[state=active]:bg-teal-100 data-[state=active]:text-teal-900">
             <span className="font-semibold">Corte 4</span>
             <Badge variant="secondary" className="mt-1">
               {loading ? '...' : `${counts.corte4} registros`}
+            </Badge>
+          </TabsTrigger>
+          <TabsTrigger value="finales" className="flex flex-col py-3 data-[state=active]:bg-emerald-100 data-[state=active]:text-emerald-900">
+            <span className="font-semibold flex items-center gap-1">
+              <DollarSign className="h-4 w-4" />
+              Consolidado
+            </span>
+            <Badge variant="secondary" className="mt-1">
+              {loading ? '...' : `${counts.finales} registros`}
             </Badge>
           </TabsTrigger>
         </TabsList>
@@ -135,6 +151,10 @@ export default function ViewResultsPage({ params }: { params: { zona: string; ye
 
         <TabsContent value="corte-4">
           <ViewCorte4Table zona={zona} mes={mes} periodo={periodo} />
+        </TabsContent>
+
+        <TabsContent value="finales">
+          <ViewResultadosFinalesTable zona={zona} mes={mes} periodo={periodo} />
         </TabsContent>
       </Tabs>
     </div>
