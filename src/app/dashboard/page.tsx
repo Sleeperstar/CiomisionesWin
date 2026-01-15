@@ -1,63 +1,42 @@
+"use client";
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Icons } from "@/components/icons";
-import Image from "next/image";
+import DashboardCharts from "@/components/dashboard/dashboard-charts";
+import { Suspense } from "react";
 
 export default function DashboardPage() {
   return (
-    <div className="flex flex-col gap-6">
-      <Card className="shadow-lg">
-        <CardHeader>
-          <CardTitle className="text-3xl font-bold tracking-tight text-primary">
-            Bienvenido a WinComisiones
-          </CardTitle>
-          <CardDescription className="text-lg">
-            Tu plataforma inteligente para la gestión de comisiones de ventas.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <p className="mb-4">
-            Navega usando la barra lateral para administrar agencias, subir datos de ventas, validar comisiones y configurar tus ajustes.
+    <div className="flex flex-col gap-6 p-4 md:p-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-[#f53c00] via-[#ff8300] to-[#ffa700] bg-clip-text text-transparent">
+            Panel de Control
+          </h1>
+          <p className="text-muted-foreground mt-1">
+            Dashboard interactivo de comisiones y resultados
           </p>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            <StatCard title="Total de Agencias" value="12" icon={<Icons.Agencies className="h-6 w-6 text-primary" />} />
-            <StatCard title="Registros de Ventas Pendientes" value="150" icon={<Icons.UploadSales className="h-6 w-6 text-primary" />} />
-            <StatCard title="Validaciones Necesarias" value="5" icon={<Icons.SmartValidation className="h-6 w-6 text-destructive" />} />
-          </div>
-           <div className="mt-6 rounded-lg overflow-hidden shadow-md">
-            <Image 
-              src="https://placehold.co/1200x400.png" 
-              alt="Ilustración de Panel Financiero" 
-              width={1200} 
-              height={400} 
-              className="w-full h-auto object-cover"
-              data-ai-hint="finance business"
-            />
-          </div>
-        </CardContent>
-      </Card>
+        </div>
+        <div className="hidden md:flex items-center gap-2">
+          <img 
+            src="/win-logo.png" 
+            alt="Win Logo" 
+            className="h-10 w-auto"
+            onError={(e) => { e.currentTarget.style.display = 'none' }}
+          />
+        </div>
+      </div>
+
+      {/* Dashboard Charts */}
+      <Suspense fallback={
+        <div className="flex items-center justify-center h-96">
+          <Icons.Spinner className="h-12 w-12 animate-spin text-[#f53c00]" />
+          <span className="ml-4 text-xl text-muted-foreground">Cargando dashboard...</span>
+        </div>
+      }>
+        <DashboardCharts />
+      </Suspense>
     </div>
-  );
-}
-
-interface StatCardProps {
-  title: string;
-  value: string;
-  icon: React.ReactNode;
-}
-
-function StatCard({ title, value, icon }: StatCardProps) {
-  return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium">{title}</CardTitle>
-        {icon}
-      </CardHeader>
-      <CardContent>
-        <div className="text-2xl font-bold">{value}</div>
-        <p className="text-xs text-muted-foreground">
-          +20.1% desde el mes pasado (datos de prueba)
-        </p>
-      </CardContent>
-    </Card>
   );
 }
