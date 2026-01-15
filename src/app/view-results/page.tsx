@@ -13,6 +13,13 @@ const zonas = [
   { value: "provincia", label: "Provincia" },
 ];
 
+// Generar años desde 2024 hasta el año actual + 1
+const currentYear = new Date().getFullYear();
+const years = Array.from({ length: currentYear - 2023 }, (_, i) => ({
+  value: String(2024 + i),
+  label: String(2024 + i)
+}));
+
 const meses = [
   { value: "enero", label: "Enero" },
   { value: "febrero", label: "Febrero" },
@@ -31,11 +38,12 @@ const meses = [
 export default function SelectViewResultsPage() {
   const router = useRouter();
   const [zona, setZona] = useState<string>("");
+  const [year, setYear] = useState<string>(String(currentYear));
   const [mes, setMes] = useState<string>("");
 
   const handleContinue = () => {
-    if (zona && mes) {
-      router.push(`/view-results/${zona}/${mes}`);
+    if (zona && year && mes) {
+      router.push(`/view-results/${zona}/${year}/${mes}`);
     }
   };
 
@@ -72,6 +80,22 @@ export default function SelectViewResultsPage() {
             </div>
 
             <div className="space-y-2">
+              <Label htmlFor="year-select">Año</Label>
+              <Select onValueChange={setYear} value={year}>
+                <SelectTrigger id="year-select" className="border-blue-200 focus:ring-blue-500">
+                  <SelectValue placeholder="Seleccione un año..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {years.map((y) => (
+                    <SelectItem key={y.value} value={y.value}>
+                      {y.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
               <Label htmlFor="mes-select">Mes</Label>
               <Select onValueChange={setMes} value={mes}>
                 <SelectTrigger id="mes-select" className="border-blue-200 focus:ring-blue-500">
@@ -89,7 +113,7 @@ export default function SelectViewResultsPage() {
 
             <Button 
               onClick={handleContinue} 
-              disabled={!zona || !mes}
+              disabled={!zona || !year || !mes}
               className="w-full mt-6 bg-blue-600 hover:bg-blue-700 text-white"
             >
               <Icons.ViewResults className="mr-2 h-4 w-4" />

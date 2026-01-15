@@ -2,8 +2,6 @@
 
 import { useState, useEffect } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Icons } from "@/components/icons";
 import { supabase } from "@/lib/supabase";
@@ -30,15 +28,15 @@ interface CorteCounts {
   corte4: number;
 }
 
-export default function ViewResultsPage({ params }: { params: { zona: string; mes: string } }) {
-  const { zona, mes } = params;
+export default function ViewResultsPage({ params }: { params: { zona: string; year: string; mes: string } }) {
+  const { zona, year, mes } = params;
   const { toast } = useToast();
   const [counts, setCounts] = useState<CorteCounts>({ corte1: 0, corte2: 0, corte3: 0, corte4: 0 });
   const [loading, setLoading] = useState(true);
 
   const monthNumber = monthMap[mes];
-  const year = 2025;
-  const periodo = (year * 100) + monthNumber;
+  const yearNumber = parseInt(year, 10);
+  const periodo = (yearNumber * 100) + monthNumber;
 
   useEffect(() => {
     const fetchCounts = async () => {
@@ -84,7 +82,7 @@ export default function ViewResultsPage({ params }: { params: { zona: string; me
             Visualizar Resultados
           </h2>
           <p className="text-muted-foreground">
-            {formatTitle(zona)} • {formatTitle(mes)} 2025 • Periodo {periodo}
+            {formatTitle(zona)} • {formatTitle(mes)} {year} • Periodo {periodo}
           </p>
         </div>
         <div className="flex gap-2">

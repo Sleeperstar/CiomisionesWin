@@ -52,7 +52,7 @@ interface Totals {
     totalPagar: number;
 }
 
-export default function ResultadoComision({ corte, zona, mes }: { corte: string; zona: string; mes: string }) {
+export default function ResultadoComision({ corte, zona, mes, year = '2025' }: { corte: string; zona: string; mes: string; year?: string }) {
     const [data, setData] = useState<ComisionResumen[]>([]);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -107,8 +107,8 @@ export default function ResultadoComision({ corte, zona, mes }: { corte: string;
 
         try {
             const monthNumber = monthMap[mes];
-            const year = 2025;
-            const periodo = (year * 100) + monthNumber;
+            const yearNumber = parseInt(year, 10);
+            const periodo = (yearNumber * 100) + monthNumber;
 
             // Por ahora solo implementamos Corte 1
             // Los cortes 2, 3 y 4 tienen estructuras diferentes con penalidades y clawbacks
@@ -190,14 +190,14 @@ export default function ResultadoComision({ corte, zona, mes }: { corte: string;
                 return;
             }
 
-            const year = 2025;
+            const yearNumber = parseInt(year, 10);
 
             try {
                 // UNA SOLA CONSULTA: La función RPC calcula todo incluyendo % cumplimiento, factor y total
                 const { data: rpcData, error: rpcError } = await supabase.rpc('get_comisiones_resumen', {
                     p_zona: zona,
                     p_mes: monthNumber,
-                    p_year: year,
+                    p_year: yearNumber,
                     p_corte: corteNumber  // Nuevo parámetro: corte seleccionado
                 });
 
@@ -264,7 +264,7 @@ export default function ResultadoComision({ corte, zona, mes }: { corte: string;
         };
 
         fetchData();
-    }, [corte, zona, mes, corteNumber, toast]);
+    }, [corte, zona, mes, year, corteNumber, toast]);
 
 
     // Componente para el botón de ordenar
@@ -321,7 +321,7 @@ export default function ResultadoComision({ corte, zona, mes }: { corte: string;
                             Resultado de Comisiones - Corte {corteNumber}
                         </CardTitle>
                         <CardDescription className="text-orange-100 mt-1">
-                            {data.length} agencias • {mes.charAt(0).toUpperCase() + mes.slice(1)} 2025 • {zona.charAt(0).toUpperCase() + zona.slice(1)}
+                            {data.length} agencias • {mes.charAt(0).toUpperCase() + mes.slice(1)} {year} • {zona.charAt(0).toUpperCase() + zona.slice(1)}
                         </CardDescription>
                     </div>
                     <div className="flex flex-wrap gap-2 items-center">

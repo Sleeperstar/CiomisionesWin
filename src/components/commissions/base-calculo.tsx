@@ -26,7 +26,7 @@ const monthMap: { [key: string]: number } = {
 // Límite de muestra para mostrar en la tabla (evita timeouts)
 const SAMPLE_LIMIT = 100;
 
-export default function BaseCalculo({ corte, zona, mes }: { corte: string; zona: string; mes: string }) {
+export default function BaseCalculo({ corte, zona, mes, year = '2025' }: { corte: string; zona: string; mes: string; year?: string }) {
     const [records, setRecords] = useState<SalesRecord[]>([]);
     const [totalCount, setTotalCount] = useState(0);
     const [loading, setLoading] = useState(true);
@@ -45,9 +45,9 @@ export default function BaseCalculo({ corte, zona, mes }: { corte: string; zona:
                 return;
             }
 
-            const year = 2025;
-            const startDate = `${year}-${String(monthNumber).padStart(2, '0')}-01`;
-            const nextMonthDate = new Date(year, monthNumber, 1);
+            const yearNumber = parseInt(year, 10);
+            const startDate = `${yearNumber}-${String(monthNumber).padStart(2, '0')}-01`;
+            const nextMonthDate = new Date(yearNumber, monthNumber, 1);
             const endDate = nextMonthDate.toISOString().split('T')[0];
 
             // Construir los filtros base
@@ -113,7 +113,7 @@ export default function BaseCalculo({ corte, zona, mes }: { corte: string; zona:
         };
 
         fetchAndFilterData();
-    }, [corte, zona, mes, toast]);
+    }, [corte, zona, mes, year, toast]);
 
 
     if (loading) {

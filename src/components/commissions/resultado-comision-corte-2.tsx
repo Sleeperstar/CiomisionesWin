@@ -85,7 +85,7 @@ interface Totals {
     agenciasConError: number;
 }
 
-export default function ResultadoComisionCorte2({ zona, mes }: { zona: string; mes: string }) {
+export default function ResultadoComisionCorte2({ zona, mes, year = '2025' }: { zona: string; mes: string; year?: string }) {
     const [data, setData] = useState<ComisionCorte2[]>([]);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -148,8 +148,8 @@ export default function ResultadoComisionCorte2({ zona, mes }: { zona: string; m
 
         try {
             const monthNumber = monthMap[mes];
-            const year = 2025;
-            const periodo = (year * 100) + monthNumber;
+            const yearNumber = parseInt(year, 10);
+            const periodo = (yearNumber * 100) + monthNumber;
 
             // Preparar datos para inserción en tabla resultado_comisiones_corte_2
             const dataToSave = data.map(row => ({
@@ -222,16 +222,16 @@ export default function ResultadoComisionCorte2({ zona, mes }: { zona: string; m
         const fetchData = async () => {
             setLoading(true);
             const monthNumber = monthMap[mes];
-            const year = 2025;
+            const yearNumber = parseInt(year, 10);
 
-            console.log(`[Corte 2] Fetching data for zona=${zona}, mes=${monthNumber}, year=${year}`);
+            console.log(`[Corte 2] Fetching data for zona=${zona}, mes=${monthNumber}, year=${yearNumber}`);
 
             try {
                 // Llamar a la función RPC para Corte 2
                 const { data: rpcData, error: rpcError } = await supabase.rpc('get_comisiones_corte_2', {
                     p_zona: zona,
                     p_mes: monthNumber,
-                    p_year: year
+                    p_year: yearNumber
                 });
 
                 if (rpcError) {
@@ -326,7 +326,7 @@ export default function ResultadoComisionCorte2({ zona, mes }: { zona: string; m
         };
 
         fetchData();
-    }, [zona, mes, toast]);
+    }, [zona, mes, year, toast]);
 
     // Componente para los botones de ordenación
     const SortButton = ({ columnKey, children }: { columnKey: keyof ComisionCorte2; children: React.ReactNode }) => (
@@ -383,7 +383,7 @@ export default function ResultadoComisionCorte2({ zona, mes }: { zona: string; m
                                 Resultado de Comisiones - Corte 2
                             </CardTitle>
                             <CardDescription className="text-orange-100 mt-1">
-                                {data.length} agencias • {mes.charAt(0).toUpperCase() + mes.slice(1)} 2025 • {zona.charAt(0).toUpperCase() + zona.slice(1)}
+                                {data.length} agencias • {mes.charAt(0).toUpperCase() + mes.slice(1)} {year} • {zona.charAt(0).toUpperCase() + zona.slice(1)}
                             </CardDescription>
                         </div>
                         <div className="flex flex-wrap gap-2 items-center">

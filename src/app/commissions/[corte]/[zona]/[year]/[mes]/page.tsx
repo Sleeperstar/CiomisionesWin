@@ -18,18 +18,18 @@ function formatTitle(slug: string) {
     .join(' ');
 }
 
-export default function CommissionCalculationPage({ params }: { params: { corte: string; zona: string; mes: string } }) {
-  const { corte, zona, mes } = params;
+export default function CommissionCalculationPage({ params }: { params: { corte: string; zona: string; year: string; mes: string } }) {
+  const { corte, zona, year, mes } = params;
 
   // Corte 1 y Corte 2 están implementados para Lima
   const isImplemented = (corte === 'corte-1' || corte === 'corte-2') && zona === 'lima';
-  const tabTitle = `Base ${formatTitle(corte)} - ${formatTitle(zona)} - ${formatTitle(mes)}`;
+  const tabTitle = `Base ${formatTitle(corte)} - ${formatTitle(zona)} - ${formatTitle(mes)} ${year}`;
 
   return (
     <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
       <div className="flex items-center justify-between space-y-2">
         <h2 className="text-3xl font-bold tracking-tight">
-          Cálculo de Comisiones: {formatTitle(corte)} - {formatTitle(zona)} - {formatTitle(mes)}
+          Cálculo de Comisiones: {formatTitle(corte)} - {formatTitle(zona)} - {formatTitle(mes)} {year}
         </h2>
       </div>
 
@@ -48,14 +48,14 @@ export default function CommissionCalculationPage({ params }: { params: { corte:
               <Icons.Analytics className="mr-2 h-4 w-4" />
               Análisis de Tablas
             </TabsTrigger>
-                        <TabsTrigger value="resultado_comision">
+            <TabsTrigger value="resultado_comision">
               <Icons.Analytics className="mr-2 h-4 w-4" />
               Resultado de Comisiones
             </TabsTrigger>
           </TabsList>
 
           <TabsContent value="base_calculo">
-            <BaseCalculo corte={corte} zona={zona} mes={mes} />
+            <BaseCalculo corte={corte} zona={zona} mes={mes} year={year} />
           </TabsContent>
 
           <TabsContent value="upload_parameters">
@@ -78,9 +78,9 @@ export default function CommissionCalculationPage({ params }: { params: { corte:
 
           <TabsContent value="resultado_comision">
             {corte === 'corte-1' ? (
-              <ResultadoComision corte={corte} zona={zona} mes={mes} />
+              <ResultadoComision corte={corte} zona={zona} mes={mes} year={year} />
             ) : corte === 'corte-2' ? (
-              <ResultadoComisionCorte2 zona={zona} mes={mes} />
+              <ResultadoComisionCorte2 zona={zona} mes={mes} year={year} />
             ) : (
               <Card>
                 <CardContent className="py-8 text-center text-muted-foreground">
@@ -95,14 +95,15 @@ export default function CommissionCalculationPage({ params }: { params: { corte:
             <CardHeader>
                 <CardTitle>Página en Construcción</CardTitle>
                 <CardDescription>
-                    La funcionalidad para {formatTitle(corte)}, {formatTitle(zona)} y {formatTitle(mes)} aún no está implementada.
+                    La funcionalidad para {formatTitle(corte)}, {formatTitle(zona)} y {formatTitle(mes)} {year} aún no está implementada.
                 </CardDescription>
             </CardHeader>
             <CardContent>
-                <p>Por favor, seleccione Corte 1 y Lima para ver la funcionalidad disponible.</p>
+                <p>Por favor, seleccione Corte 1 o Corte 2 y Lima para ver la funcionalidad disponible.</p>
             </CardContent>
         </Card>
       )}
     </div>
   );
-} 
+}
+
