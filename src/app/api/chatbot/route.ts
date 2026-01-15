@@ -133,33 +133,34 @@ export async function POST(req: NextRequest) {
 
 ${dbSchema}
 
-INSTRUCCIONES:
-1. Analiza la pregunta del usuario y determina qué tipo de consulta es:
+INSTRUCCIONES CRÍTICAS:
+
+⚠️ REGLA #1 - SIEMPRE USA LA FUNCIÓN:
+- NUNCA inventes datos ni respondas con información que no venga de la base de datos
+- SIEMPRE debes llamar a la función buscar_comisiones para cualquier pregunta sobre agencias, comisiones, penalidades, altas, etc.
+- NO generes respuestas con datos inventados - si no puedes llamar a la función, di que necesitas más información
+
+1. Analiza la pregunta y determina el tipo de consulta:
    - COMISION: Si pregunta cuánto ganó, comisionó, total a pagar, neto final
    - PENALIDAD: Si pregunta por penalidad o descuento por churn
    - CLAWBACK: Si pregunta por clawback o devolución
    - DESCUENTOS: Si pregunta por descuentos totales
    - ALTAS: Si pregunta por altas o instalaciones
-   - COMPARATIVA: Si quiere comparar varias agencias
-   - DETALLE: Si quiere ver todo el detalle completo
-   - RANKING: Si pregunta por las mejores o peores agencias
+   - DETALLE: Si quiere ver todo el detalle completo, información general de una agencia
+   - RANKING_MEJORES: Si pregunta por las mejores agencias, top agencias
+   - RANKING_PENALIZADOS: Si pregunta por agencias con más descuentos o penalizadas
    
 2. Convierte nombres de meses en español a formato YYYYMM:
    - "agosto 2025" -> 202508
    - "agosto" sin año -> 202508 (asume 2025)
    - "abril" -> 202504
+   - "noviembre" -> 202511
    
-3. Busca por nombre de agencia de manera flexible (ignora mayúsculas/minúsculas)
+3. SIEMPRE llama a la función buscar_comisiones - NO inventes datos
 
-4. Para preguntas de ranking o comparativas, ordena apropiadamente
+4. Si el usuario no especifica mes, pregúntale qué mes quiere consultar
 
-5. Responde de manera clara y concisa en español
-
-6. NO uses asteriscos para negritas ni formato markdown, usa texto plano
-
-7. Usa emojis para hacer la respuesta más visual
-
-8. Siempre incluye el resultado_neto_final cuando sea relevante ya que es el monto real que recibe la agencia
+5. Responde de manera clara y concisa en español usando los datos de la función
 
 EJEMPLOS:
 "Cuánto comisionó ALIV en agosto?" -> buscar resultado_neto_final
@@ -213,12 +214,12 @@ EJEMPLOS:
           },
         },
       ],
-      function_call: 'auto',
+      function_call: { name: 'buscar_comisiones' },
     });
 
     const responseMessage = completion.choices[0].message;
 
-    // Si GPT quiere llamar una función
+    // GPT SIEMPRE debe llamar a la función
     if (responseMessage.function_call) {
       const functionName = responseMessage.function_call.name;
       const functionArgs = JSON.parse(responseMessage.function_call.arguments);
@@ -445,13 +446,13 @@ EJEMPLOS:
       }
     }
 
-    // Respuesta normal de GPT
+    // Si por alguna razón no se llamó a la función (no debería pasar)
     return NextResponse.json({
-      response: responseMessage.content || 'No pude generar una respuesta.',
+      response: 'Por favor, especifica qué información necesitas. Por ejemplo:\n- "Cuánto comisionó [AGENCIA] en [MES]?"\n- "Dame el detalle de [AGENCIA] en [MES]"\n- "Top 5 agencias de [MES]"\n- "Qué penalidades tuvo [AGENCIA]?"',
       conversationHistory: [
         ...conversationHistory,
         { role: 'user', content: message },
-        { role: 'assistant', content: responseMessage.content || '' },
+        { role: 'assistant', content: 'Necesito más información para buscar' },
       ],
     });
 
