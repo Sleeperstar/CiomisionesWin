@@ -16,14 +16,29 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Función para convertir monto a texto legible
+    const formatMontoParaVoz = (match: string, monto: string): string => {
+      // Remover comas de miles y convertir punto decimal
+      // "695,489.79" -> "695489 con 79"
+      const sinComas = monto.replace(/,/g, '');
+      const partes = sinComas.split('.');
+      if (partes.length === 2) {
+        return `${partes[0]} soles con ${partes[1]} céntimos`;
+      }
+      return `${sinComas} soles`;
+    };
+
     // Limpiar texto para mejor síntesis de voz
     const cleanText = text
-      .replace(/[📊📅📈💵💰⚠️🔄🏷️🎤🏆🥇🥈🥉🆕🎁💳❌✅🏢🎯📞💻]/g, '') // Remover emojis
+      .replace(/[📊📅📈💵💰⚠️🔄🏷️🎤🏆🥇🥈🥉🆕🎁💳❌✅🏢🎯📞💻🎧]/g, '') // Remover emojis
       .replace(/━+/g, '') // Remover líneas decorativas
-      .replace(/S\//g, 'soles ') // Reemplazar símbolo de soles
+      // Convertir montos: "S/ 695,489.79" -> "695489 soles con 79 céntimos"
+      .replace(/S\/\s*([\d,]+\.?\d*)/g, formatMontoParaVoz)
       .replace(/x(\d)/g, 'por $1') // "x2" -> "por 2"
       .replace(/%/g, ' por ciento') // "%" -> "por ciento"
       .replace(/\n{3,}/g, '\n\n') // Reducir saltos de línea múltiples
+      .replace(/\n/g, '. ') // Convertir saltos de línea en pausas
+      .replace(/\s{2,}/g, ' ') // Reducir espacios múltiples
       .trim();
 
     // Limitar longitud para evitar costos excesivos (máx ~4000 caracteres)
