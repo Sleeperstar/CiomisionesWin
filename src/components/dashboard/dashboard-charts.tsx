@@ -16,7 +16,8 @@ import { supabase } from "@/lib/supabase";
 import { Icons } from "@/components/icons";
 import { 
     TrendingUp, TrendingDown, DollarSign, Users, Target, AlertTriangle,
-    ArrowUpRight, ArrowDownRight, BarChart3, PieChartIcon, RefreshCw
+    ArrowUpRight, ArrowDownRight, BarChart3, PieChartIcon, RefreshCw,
+    ArrowUpDown, ArrowUp, ArrowDown
 } from "lucide-react";
 
 // Colores corporativos
@@ -101,6 +102,7 @@ export default function DashboardCharts() {
     const [zona, setZona] = useState("todas");
     const [year, setYear] = useState(String(currentYear));
     const [mes, setMes] = useState("0");
+    const [eficienciaSort, setEficienciaSort] = useState<'comision' | 'eficiencia-asc' | 'eficiencia-desc'>('comision');
 
     // Calcular KPIs
     const kpis: KPIs = useMemo(() => {
@@ -161,17 +163,34 @@ export default function DashboardCharts() {
 
     // Datos para el gráfico de comisión vs neto por agencia
     const comisionVsNetoData = useMemo(() => {
-        return [...data]
-            .sort((a, b) => b.comision_total - a.comision_total)
-            .slice(0, 8)
-            .map(r => ({
-                agencia: r.agencia.length > 12 ? r.agencia.substring(0, 12) + '...' : r.agencia,
-                comision: r.comision_total,
-                neto: r.resultado_neto_final,
-                descuentos: r.total_descuentos,
-                eficiencia: r.comision_total > 0 ? (r.resultado_neto_final / r.comision_total * 100) : 100,
-            }));
-    }, [data]);
+        // Primero calculamos la eficiencia para todos
+        const dataWithEficiencia = [...data].map(r => ({
+            agencia: r.agencia,
+            agenciaCorta: r.agencia.length > 12 ? r.agencia.substring(0, 12) + '...' : r.agencia,
+            comision: r.comision_total,
+            neto: r.resultado_neto_final,
+            descuentos: r.total_descuentos,
+            eficiencia: r.comision_total > 0 ? (r.resultado_neto_final / r.comision_total * 100) : 100,
+        }));
+
+        // Ordenamos según el criterio seleccionado
+        let sortedData;
+        if (eficienciaSort === 'eficiencia-desc') {
+            sortedData = dataWithEficiencia.sort((a, b) => b.eficiencia - a.eficiencia);
+        } else if (eficienciaSort === 'eficiencia-asc') {
+            sortedData = dataWithEficiencia.sort((a, b) => a.eficiencia - b.eficiencia);
+        } else {
+            sortedData = dataWithEficiencia.sort((a, b) => b.comision - a.comision);
+        }
+
+        return sortedData.slice(0, 8).map(r => ({
+            agencia: r.agenciaCorta,
+            comision: r.comision,
+            neto: r.neto,
+            descuentos: r.descuentos,
+            eficiencia: r.eficiencia,
+        }));
+    }, [data, eficienciaSort]);
 
     // Datos para el gráfico radial de eficiencia
     const eficienciaData = useMemo(() => {
@@ -253,11 +272,19 @@ export default function DashboardCharts() {
             return (
                 <div className="bg-white dark:bg-slate-800 p-3 rounded-lg shadow-lg border border-slate-200 dark:border-slate-700">
                     <p className="font-semibold text-sm mb-2">{label}</p>
-                    {payload.map((entry: any, index: number) => (
-                        <p key={index} className="text-xs" style={{ color: entry.color }}>
-                            {entry.name}: {formatCurrencyFull(entry.value)}
-                        </p>
-                    ))}
+                    {payload.map((entry: any, index: number) => {
+                        // Si es eficiencia, formatear como porcentaje, no como moneda
+                        const isEficiencia = entry.dataKey === 'eficiencia' || entry.name?.includes('Eficiencia');
+                        const formattedValue = isEficiencia 
+                            ? `${Number(entry.value).toFixed(1)}%` 
+                            : formatCurrencyFull(entry.value);
+                        
+                        return (
+                            <p key={index} className="text-xs" style={{ color: entry.color }}>
+                                {entry.name}: {formattedValue}
+                            </p>
+                        );
+                    })}
                 </div>
             );
         }
@@ -440,13 +467,53 @@ export default function DashboardCharts() {
             {/* Gráfico de Comisión vs Neto */}
             <Card className="border-0 shadow-lg overflow-hidden">
                 <CardHeader className="bg-gradient-to-r from-[#059669] to-[#10b981] text-white">
-                    <CardTitle className="flex items-center gap-2">
-                        <TrendingUp className="h-5 w-5" />
-                        Comisión Bruta vs Neto Final por Agencia
-                    </CardTitle>
-                    <CardDescription className="text-emerald-100">
-                        Comparativa de comisión total y resultado neto (Top 8 agencias)
-                    </CardDescription>
+                    <div className="flex items-start justify-between">
+                        <div>
+                            <CardTitle className="flex items-center gap-2">
+                                <TrendingUp className="h-5 w-5" />
+                                Comisión Bruta vs Neto Final por Agencia
+                            </CardTitle>
+                            <CardDescription className="text-emerald-100">
+                                Comparativa de comisión total y resultado neto (Top 8 agencias)
+                            </CardDescription>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <span className="text-xs text-emerald-100">Ordenar por:</span>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                    if (eficienciaSort === 'comision') {
+                                        setEficienciaSort('eficiencia-desc');
+                                    } else if (eficienciaSort === 'eficiencia-desc') {
+                                        setEficienciaSort('eficiencia-asc');
+                                    } else {
+                                        setEficienciaSort('comision');
+                                    }
+                                }}
+                                className="bg-white/20 text-white border-white/40 hover:bg-white/30 text-xs h-8"
+                            >
+                                {eficienciaSort === 'comision' && (
+                                    <>
+                                        <DollarSign className="h-3 w-3 mr-1" />
+                                        Comisión
+                                    </>
+                                )}
+                                {eficienciaSort === 'eficiencia-desc' && (
+                                    <>
+                                        <ArrowDown className="h-3 w-3 mr-1" />
+                                        Eficiencia ↓
+                                    </>
+                                )}
+                                {eficienciaSort === 'eficiencia-asc' && (
+                                    <>
+                                        <ArrowUp className="h-3 w-3 mr-1" />
+                                        Eficiencia ↑
+                                    </>
+                                )}
+                            </Button>
+                        </div>
+                    </div>
                 </CardHeader>
                 <CardContent className="pt-6">
                     {comisionVsNetoData.length > 0 ? (
