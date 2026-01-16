@@ -20,10 +20,10 @@ function renderLine(line: string): React.ReactNode {
   if (line === '---') {
     return <hr className="my-2 border-slate-300 dark:border-slate-600" />;
   }
-  
+
   // Procesar negritas **texto**
   const parts = line.split(/(\*\*[^*]+\*\*)/g);
-  
+
   return (
     <span>
       {parts.map((part, idx) => {
@@ -121,9 +121,9 @@ export default function ChatbotInterface() {
           const transcript = Array.from(event.results)
             .map(result => result[0].transcript)
             .join('');
-          
+
           setInput(transcript);
-          
+
           // Si es resultado final, enviar automáticamente
           if (event.results[event.results.length - 1].isFinal) {
             setIsListening(false);
@@ -149,10 +149,6 @@ export default function ChatbotInterface() {
       if (recognitionRef.current) {
         recognitionRef.current.abort();
       }
-      // Cancelar cualquier síntesis de voz al desmontar
-      if (typeof window !== 'undefined' && window.speechSynthesis) {
-        window.speechSynthesis.cancel();
-      }
     };
   }, [toast]);
 
@@ -177,56 +173,85 @@ export default function ChatbotInterface() {
     }
   }, [isListening, toast]);
 
-  // Función para leer texto en voz alta
-  const speakText = useCallback((text: string) => {
-    if (typeof window === 'undefined' || !window.speechSynthesis) {
+  // Referencia al elemento de audio
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [isGeneratingAudio, setIsGeneratingAudio] = useState(false);
+
+  // Función para leer texto en voz alta usando OpenAI TTS
+  const speakText = useCallback(async (text: string) => {
+    // Si ya está generando audio, no hacer nada
+    if (isGeneratingAudio) return;
+
+    try {
+      setIsGeneratingAudio(true);
+      setIsSpeaking(true);
+
+      // Llamar al endpoint de TTS
+      const response = await fetch('/api/chatbot/tts', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ text }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Error generando audio');
+      }
+
+      // Obtener el audio como blob
+      const audioBlob = await response.blob();
+      const audioUrl = URL.createObjectURL(audioBlob);
+
+      // Crear o reutilizar el elemento de audio
+      if (audioRef.current) {
+        audioRef.current.pause();
+        URL.revokeObjectURL(audioRef.current.src);
+      }
+
+      const audio = new Audio(audioUrl);
+      audioRef.current = audio;
+
+      audio.onended = () => {
+        setIsSpeaking(false);
+        URL.revokeObjectURL(audioUrl);
+      };
+
+      audio.onerror = () => {
+        setIsSpeaking(false);
+        URL.revokeObjectURL(audioUrl);
+        toast({
+          title: "Error de audio",
+          description: "No se pudo reproducir el audio.",
+          variant: "destructive",
+        });
+      };
+
+      await audio.play();
+
+    } catch (error) {
+      console.error('Error en TTS:', error);
+      setIsSpeaking(false);
       toast({
-        title: "No disponible",
-        description: "Tu navegador no soporta síntesis de voz.",
+        title: "Error",
+        description: "No se pudo generar el audio. Verifica tu conexión.",
         variant: "destructive",
       });
-      return;
+    } finally {
+      setIsGeneratingAudio(false);
     }
+  }, [isGeneratingAudio, toast]);
 
-    // Cancelar cualquier síntesis anterior
-    window.speechSynthesis.cancel();
-
-    // Limpiar el texto de emojis y caracteres especiales para mejor lectura
-    const cleanText = text
-      .replace(/[📊📅📈💵💰⚠️🔄🏷️🎤]/g, '')
-      .replace(/---/g, '')
-      .replace(/S\//g, 'soles ')
-      .replace(/x(\d)/g, 'por $1')
-      .replace(/%/g, ' por ciento')
-      .replace(/\n+/g, '. ')
-      .replace(/•/g, ', ')
-      .trim();
-
-    const utterance = new SpeechSynthesisUtterance(cleanText);
-    utterance.lang = 'es-ES';
-    utterance.rate = 1.0;
-    utterance.pitch = 1.0;
-
-    // Buscar una voz en español
-    const voices = window.speechSynthesis.getVoices();
-    const spanishVoice = voices.find(voice => voice.lang.startsWith('es'));
-    if (spanishVoice) {
-      utterance.voice = spanishVoice;
-    }
-
-    utterance.onstart = () => setIsSpeaking(true);
-    utterance.onend = () => setIsSpeaking(false);
-    utterance.onerror = () => setIsSpeaking(false);
-
-    window.speechSynthesis.speak(utterance);
-  }, [toast]);
-
-  // Detener la síntesis de voz
+  // Detener la reproducción de audio
   const stopSpeaking = useCallback(() => {
-    if (typeof window !== 'undefined' && window.speechSynthesis) {
-      window.speechSynthesis.cancel();
-      setIsSpeaking(false);
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+      URL.revokeObjectURL(audioRef.current.src);
+      audioRef.current = null;
     }
+    setIsSpeaking(false);
+    setIsGeneratingAudio(false);
   }, []);
 
   const handleSendMessage = async () => {
@@ -265,7 +290,7 @@ export default function ChatbotInterface() {
       };
 
       setMessages(prev => [...prev, assistantMessage]);
-      
+
       // Si autoSpeak está activado, leer la respuesta
       if (autoSpeak) {
         setTimeout(() => speakText(data.response), 500);
@@ -319,9 +344,8 @@ export default function ChatbotInterface() {
             {messages.map((message, index) => (
               <div
                 key={index}
-                className={`flex gap-3 ${
-                  message.role === 'user' ? 'justify-end' : 'justify-start'
-                }`}
+                className={`flex gap-3 ${message.role === 'user' ? 'justify-end' : 'justify-start'
+                  }`}
               >
                 {message.role === 'assistant' && (
                   <Avatar className="h-8 w-8 border-2 border-orange-200">
@@ -332,11 +356,10 @@ export default function ChatbotInterface() {
                 )}
 
                 <div
-                  className={`max-w-[75%] rounded-2xl px-4 py-3 ${
-                    message.role === 'user'
-                      ? 'bg-gradient-to-br from-[#f53c00] to-[#ff8300] text-white'
-                      : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100'
-                  }`}
+                  className={`max-w-[75%] rounded-2xl px-4 py-3 ${message.role === 'user'
+                    ? 'bg-gradient-to-br from-[#f53c00] to-[#ff8300] text-white'
+                    : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100'
+                    }`}
                 >
                   <div className="text-sm whitespace-pre-wrap break-words">
                     {message.content.split('\n').map((line, i) => (
@@ -353,11 +376,25 @@ export default function ChatbotInterface() {
                         variant="ghost"
                         size="sm"
                         onClick={() => speakText(message.content)}
-                        disabled={isSpeaking}
+                        disabled={isSpeaking || isGeneratingAudio}
                         className="text-xs text-slate-500 hover:text-[#f53c00]"
                       >
-                        <Volume2 className="h-3 w-3 mr-1" />
-                        {isSpeaking ? 'Leyendo...' : 'Escuchar'}
+                        {isGeneratingAudio ? (
+                          <>
+                            <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                            Generando...
+                          </>
+                        ) : isSpeaking ? (
+                          <>
+                            <Volume2 className="h-3 w-3 mr-1 animate-pulse" />
+                            Reproduciendo...
+                          </>
+                        ) : (
+                          <>
+                            <Volume2 className="h-3 w-3 mr-1" />
+                            🎧 Escuchar (IA)
+                          </>
+                        )}
                       </Button>
                     </div>
                   )}
@@ -424,7 +461,7 @@ export default function ChatbotInterface() {
               </div>
             )}
           </div>
-          
+
           <div className="flex gap-2">
             <Input
               value={input}
