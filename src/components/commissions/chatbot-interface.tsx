@@ -1,13 +1,17 @@
 "use client";
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Send, Bot, User, Loader2, Mic, MicOff, Volume2, VolumeX } from 'lucide-react';
+import { Send, Bot, User, Loader2, Mic, MicOff, Volume2, VolumeX, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { useToast } from '@/hooks/use-toast';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+
+// Tipo de motor de voz
+type VoiceEngine = 'browser' | 'openai';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -93,6 +97,7 @@ export default function ChatbotInterface() {
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [autoSpeak, setAutoSpeak] = useState(false);
+  const [voiceEngine, setVoiceEngine] = useState<VoiceEngine>('browser'); // 'browser' o 'openai'
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const { toast } = useToast();
@@ -149,8 +154,25 @@ export default function ChatbotInterface() {
       if (recognitionRef.current) {
         recognitionRef.current.abort();
       }
+      // Cancelar síntesis de voz al desmontar
+      if (typeof window !== 'undefined' && window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+      }
     };
   }, [toast]);
+
+  // Cargar voces del navegador (necesario para algunos navegadores)
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.speechSynthesis) {
+      // Forzar carga de voces
+      window.speechSynthesis.getVoices();
+      
+      // Escuchar cuando las voces estén disponibles
+      window.speechSynthesis.onvoiceschanged = () => {
+        window.speechSynthesis.getVoices();
+      };
+    }
+  }, []);
 
   // Función para iniciar/detener reconocimiento de voz
   const toggleListening = useCallback(() => {
@@ -173,37 +195,77 @@ export default function ChatbotInterface() {
     }
   }, [isListening, toast]);
 
-  // Referencia al elemento de audio
+  // Referencia al elemento de audio (para OpenAI TTS)
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [isGeneratingAudio, setIsGeneratingAudio] = useState(false);
 
-  // Función para leer texto en voz alta usando OpenAI TTS
-  const speakText = useCallback(async (text: string) => {
-    // Si ya está generando audio, no hacer nada
+  // Función para leer con Web Speech API (navegador - mejor español)
+  const speakWithBrowser = useCallback((text: string) => {
+    if (typeof window === 'undefined' || !window.speechSynthesis) {
+      toast({
+        title: "No disponible",
+        description: "Tu navegador no soporta síntesis de voz.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Cancelar cualquier síntesis anterior
+    window.speechSynthesis.cancel();
+
+    // Limpiar el texto para mejor lectura
+    const cleanText = text
+      .replace(/[📊📅📈💵💰⚠️🔄🏷️🎤🏆🥇🥈🥉🆕🎁💳❌✅🏢🎯📞💻🎧]/g, '')
+      .replace(/━+/g, '')
+      .replace(/---/g, '')
+      .replace(/S\//g, 'soles ')
+      .replace(/x(\d)/g, 'por $1')
+      .replace(/%/g, ' por ciento')
+      .replace(/\n+/g, '. ')
+      .replace(/•/g, ', ')
+      .trim();
+
+    const utterance = new SpeechSynthesisUtterance(cleanText);
+    utterance.lang = 'es-ES';
+    utterance.rate = 1.0;
+    utterance.pitch = 1.0;
+
+    // Buscar una voz en español
+    const voices = window.speechSynthesis.getVoices();
+    const spanishVoice = voices.find(voice => 
+      voice.lang.startsWith('es') && voice.name.toLowerCase().includes('spanish')
+    ) || voices.find(voice => voice.lang.startsWith('es'));
+    
+    if (spanishVoice) {
+      utterance.voice = spanishVoice;
+    }
+
+    utterance.onstart = () => setIsSpeaking(true);
+    utterance.onend = () => setIsSpeaking(false);
+    utterance.onerror = () => setIsSpeaking(false);
+
+    window.speechSynthesis.speak(utterance);
+  }, [toast]);
+
+  // Función para leer con OpenAI TTS
+  const speakWithOpenAI = useCallback(async (text: string) => {
     if (isGeneratingAudio) return;
 
     try {
       setIsGeneratingAudio(true);
       setIsSpeaking(true);
 
-      // Llamar al endpoint de TTS
       const response = await fetch('/api/chatbot/tts', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text }),
       });
 
-      if (!response.ok) {
-        throw new Error('Error generando audio');
-      }
+      if (!response.ok) throw new Error('Error generando audio');
 
-      // Obtener el audio como blob
       const audioBlob = await response.blob();
       const audioUrl = URL.createObjectURL(audioBlob);
 
-      // Crear o reutilizar el elemento de audio
       if (audioRef.current) {
         audioRef.current.pause();
         URL.revokeObjectURL(audioRef.current.src);
@@ -242,13 +304,27 @@ export default function ChatbotInterface() {
     }
   }, [isGeneratingAudio, toast]);
 
-  // Detener la reproducción de audio
+  // Función principal que elige el motor de voz
+  const speakText = useCallback((text: string) => {
+    if (voiceEngine === 'browser') {
+      speakWithBrowser(text);
+    } else {
+      speakWithOpenAI(text);
+    }
+  }, [voiceEngine, speakWithBrowser, speakWithOpenAI]);
+
+  // Detener la reproducción de audio (ambos motores)
   const stopSpeaking = useCallback(() => {
+    // Detener OpenAI audio
     if (audioRef.current) {
       audioRef.current.pause();
       audioRef.current.currentTime = 0;
       URL.revokeObjectURL(audioRef.current.src);
       audioRef.current = null;
+    }
+    // Detener Web Speech API
+    if (typeof window !== 'undefined' && window.speechSynthesis) {
+      window.speechSynthesis.cancel();
     }
     setIsSpeaking(false);
     setIsGeneratingAudio(false);
@@ -379,7 +455,7 @@ export default function ChatbotInterface() {
                         disabled={isSpeaking || isGeneratingAudio}
                         className="text-xs text-slate-500 hover:text-[#f53c00]"
                       >
-                        {isGeneratingAudio ? (
+                        {isGeneratingAudio && voiceEngine === 'openai' ? (
                           <>
                             <Loader2 className="h-3 w-3 mr-1 animate-spin" />
                             Generando...
@@ -392,7 +468,7 @@ export default function ChatbotInterface() {
                         ) : (
                           <>
                             <Volume2 className="h-3 w-3 mr-1" />
-                            🎧 Escuchar (IA)
+                            {voiceEngine === 'browser' ? '🌐 Escuchar' : '🤖 Escuchar'}
                           </>
                         )}
                       </Button>
@@ -431,35 +507,70 @@ export default function ChatbotInterface() {
         {/* Área de input */}
         <div className="border-t bg-white dark:bg-slate-900 p-4">
           {/* Controles de voz */}
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
+          <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Selector de motor de voz */}
+              <div className="flex items-center gap-1">
+                <Settings className="h-4 w-4 text-slate-500" />
+                <Select value={voiceEngine} onValueChange={(v) => setVoiceEngine(v as VoiceEngine)}>
+                  <SelectTrigger className="h-8 w-[140px] text-xs">
+                    <SelectValue placeholder="Motor de voz" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="browser">
+                      <span className="flex items-center gap-1">
+                        🌐 Navegador (ES)
+                      </span>
+                    </SelectItem>
+                    <SelectItem value="openai">
+                      <span className="flex items-center gap-1">
+                        🤖 OpenAI
+                      </span>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              {/* Botón auto-speak */}
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => setAutoSpeak(!autoSpeak)}
-                className={`text-xs ${autoSpeak ? 'bg-green-100 border-green-500 text-green-700' : ''}`}
+                className={`text-xs h-8 ${autoSpeak ? 'bg-green-100 border-green-500 text-green-700' : ''}`}
               >
                 {autoSpeak ? <Volume2 className="h-4 w-4 mr-1" /> : <VolumeX className="h-4 w-4 mr-1" />}
-                {autoSpeak ? 'Voz ON' : 'Voz OFF'}
+                {autoSpeak ? 'Auto ON' : 'Auto OFF'}
               </Button>
+              
+              {/* Botón detener */}
               {isSpeaking && (
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={stopSpeaking}
-                  className="text-xs text-red-600 border-red-300"
+                  className="text-xs h-8 text-red-600 border-red-300"
                 >
                   <VolumeX className="h-4 w-4 mr-1" />
                   Detener
                 </Button>
               )}
             </div>
-            {isListening && (
-              <div className="flex items-center gap-2 text-sm text-red-600">
-                <div className="w-2 h-2 bg-red-600 rounded-full animate-pulse" />
-                Escuchando...
-              </div>
-            )}
+            
+            {/* Indicadores de estado */}
+            <div className="flex items-center gap-2">
+              {isListening && (
+                <div className="flex items-center gap-2 text-sm text-red-600">
+                  <div className="w-2 h-2 bg-red-600 rounded-full animate-pulse" />
+                  Escuchando...
+                </div>
+              )}
+              {isGeneratingAudio && voiceEngine === 'openai' && (
+                <div className="flex items-center gap-2 text-sm text-blue-600">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  Generando audio...
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="flex gap-2">
