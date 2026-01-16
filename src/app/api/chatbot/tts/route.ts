@@ -27,14 +27,16 @@ export async function POST(req: NextRequest) {
       .trim();
 
     // Limitar longitud para evitar costos excesivos (máx ~4000 caracteres)
-    const truncatedText = cleanText.length > 4000 
+    const truncatedText = cleanText.length > 4000
       ? cleanText.substring(0, 4000) + '... El mensaje fue truncado por ser muy largo.'
       : cleanText;
 
     // Llamar a OpenAI TTS API
+    // Usamos tts-1 en lugar de tts-1-hd para mayor velocidad
+    // Usamos voz 'alloy' que pronuncia mejor el español
     const mp3Response = await openai.audio.speech.create({
-      model: 'tts-1-hd',
-      voice: 'nova',
+      model: 'tts-1',  // Más rápido que tts-1-hd
+      voice: 'alloy',  // Mejor pronunciación en español que nova
       input: truncatedText,
       response_format: 'mp3',
       speed: 1.0,
@@ -54,9 +56,9 @@ export async function POST(req: NextRequest) {
 
   } catch (error: unknown) {
     console.error('Error en TTS API:', error);
-    
+
     const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
-    
+
     return NextResponse.json(
       { error: 'Error generando audio', details: errorMessage },
       { status: 500 }
