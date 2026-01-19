@@ -9,13 +9,27 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { useToast } from '@/hooks/use-toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import ChatbotChart from './chatbot-chart';
 
 // Tipo de motor de voz
 type VoiceEngine = 'browser' | 'openai';
 
+// Tipos de gráficos disponibles
+type ChartType = 'bar' | 'pie' | 'horizontal_bar' | 'stacked_bar' | 'grouped_bar' | null;
+
+// Interfaz para datos del gráfico
+interface ChartData {
+  type: ChartType;
+  title: string;
+  data: Array<Record<string, string | number>>;
+  dataKeys: string[];
+  colors?: string[];
+}
+
 interface Message {
   role: 'user' | 'assistant';
   content: string;
+  chartData?: ChartData | null;
 }
 
 // Función para renderizar una línea con formato markdown básico
@@ -363,6 +377,7 @@ export default function ChatbotInterface() {
       const assistantMessage: Message = {
         role: 'assistant',
         content: data.response,
+        chartData: data.chartData || null,
       };
 
       setMessages(prev => [...prev, assistantMessage]);
@@ -432,9 +447,9 @@ export default function ChatbotInterface() {
                 )}
 
                 <div
-                  className={`max-w-[75%] rounded-2xl px-4 py-3 ${message.role === 'user'
-                    ? 'bg-gradient-to-br from-[#f53c00] to-[#ff8300] text-white'
-                    : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100'
+                  className={`rounded-2xl px-4 py-3 ${message.role === 'user'
+                    ? 'max-w-[75%] bg-gradient-to-br from-[#f53c00] to-[#ff8300] text-white'
+                    : 'max-w-[85%] bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100'
                     }`}
                 >
                   <div className="text-sm whitespace-pre-wrap break-words">
@@ -445,6 +460,12 @@ export default function ChatbotInterface() {
                       </React.Fragment>
                     ))}
                   </div>
+                  
+                  {/* Gráfico si está disponible */}
+                  {message.role === 'assistant' && message.chartData && (
+                    <ChatbotChart chartData={message.chartData} />
+                  )}
+
                   {/* Botón para leer mensaje del asistente */}
                   {message.role === 'assistant' && (
                     <div className="mt-2 pt-2 border-t border-slate-200 dark:border-slate-600 flex justify-end">

@@ -109,7 +109,7 @@ export default function AgenciesPage() {
                 <FormItem>
                   <FormLabel>Teléfono (Opcional)</FormLabel>
                   <FormControl>
-                    <Input type="tel" placeholder="+52-55-1234-5678" {...field} />
+                    <Input type="tel" placeholder="+51-912-345-567" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -149,7 +149,7 @@ export default function AgenciesPage() {
                   <FormItem>
                     <FormLabel>Ciudad</FormLabel>
                     <FormControl>
-                      <Input placeholder="Ciudad de México" {...field} />
+                      <Input placeholder="Lima" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -162,7 +162,7 @@ export default function AgenciesPage() {
                   <FormItem>
                     <FormLabel>Estado / Provincia</FormLabel>
                     <FormControl>
-                      <Input placeholder="CDMX" {...field} />
+                      <Input placeholder="Lima" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -177,7 +177,7 @@ export default function AgenciesPage() {
                   <FormItem>
                     <FormLabel>Código Postal</FormLabel>
                     <FormControl>
-                      <Input placeholder="06500" {...field} />
+                      <Input placeholder="06100" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -190,7 +190,7 @@ export default function AgenciesPage() {
                   <FormItem>
                     <FormLabel>País</FormLabel>
                     <FormControl>
-                      <Input placeholder="México" {...field} />
+                      <Input placeholder="Perú" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

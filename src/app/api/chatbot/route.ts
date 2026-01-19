@@ -44,6 +44,235 @@ interface ResultadoFinal {
   resultado_neto_final: number;
 }
 
+// Tipos de gráficos disponibles
+type ChartType = 'bar' | 'pie' | 'horizontal_bar' | 'stacked_bar' | 'grouped_bar' | null;
+
+// Interfaz para datos del gráfico
+interface ChartData {
+  type: ChartType;
+  title: string;
+  data: Array<Record<string, string | number>>;
+  dataKeys: string[];
+  colors?: string[];
+}
+
+// Función para generar datos de gráfico según el tipo de consulta
+function generateChartData(
+  typedData: ResultadoFinal[],
+  tipo_consulta: string,
+  mesNombre: string,
+  añoStr: string
+): ChartData | null {
+  if (!typedData || typedData.length === 0) return null;
+
+  const colors = ['#f53c00', '#ff8300', '#ffa700', '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899', '#14b8a6'];
+
+  switch (tipo_consulta) {
+    case 'ranking_mejores':
+      return {
+        type: 'horizontal_bar',
+        title: `Top ${typedData.length} Agencias - ${mesNombre} ${añoStr}`,
+        data: typedData.map((r, i) => ({
+          name: r.agencia.length > 20 ? r.agencia.substring(0, 20) + '...' : r.agencia,
+          'Neto Final': Number(r.resultado_neto_final || 0),
+          'Comisión': Number(r.comision_total || 0),
+          fill: colors[i % colors.length],
+        })),
+        dataKeys: ['Neto Final'],
+        colors,
+      };
+
+    case 'ranking_penalizados':
+      return {
+        type: 'horizontal_bar',
+        title: `Agencias con Mayores Descuentos - ${mesNombre} ${añoStr}`,
+        data: typedData.map((r, i) => ({
+          name: r.agencia.length > 20 ? r.agencia.substring(0, 20) + '...' : r.agencia,
+          'Total Descuentos': Number(r.total_descuentos || 0),
+          'Penalidades': Number(r.total_penalidades || 0),
+          'Clawbacks': Number(r.total_clawbacks || 0),
+          fill: colors[i % colors.length],
+        })),
+        dataKeys: ['Total Descuentos'],
+        colors: ['#ef4444', '#f97316', '#eab308'],
+      };
+
+    case 'comision':
+      if (typedData.length === 1) {
+        // Gráfico de pie para una sola agencia
+        const r = typedData[0];
+        return {
+          type: 'pie',
+          title: `Distribución de Comisión - ${r.agencia}`,
+          data: [
+            { name: 'Neto Final', value: Number(r.resultado_neto_final || 0), fill: '#22c55e' },
+            { name: 'Descuentos', value: Number(r.total_descuentos || 0), fill: '#ef4444' },
+          ],
+          dataKeys: ['value'],
+          colors: ['#22c55e', '#ef4444'],
+        };
+      } else {
+        // Gráfico de barras para múltiples agencias
+        return {
+          type: 'bar',
+          title: `Comisiones - ${mesNombre} ${añoStr}`,
+          data: typedData.slice(0, 10).map((r) => ({
+            name: r.agencia.length > 15 ? r.agencia.substring(0, 15) + '...' : r.agencia,
+            'Comisión Bruta': Number(r.comision_total || 0),
+            'Neto Final': Number(r.resultado_neto_final || 0),
+          })),
+          dataKeys: ['Comisión Bruta', 'Neto Final'],
+          colors: ['#ff8300', '#22c55e'],
+        };
+      }
+
+    case 'penalidad':
+      if (typedData.length === 1) {
+        const r = typedData[0];
+        return {
+          type: 'bar',
+          title: `Penalidades por Corte - ${r.agencia}`,
+          data: [
+            { name: 'Corte 2', 'Penalidad': Number(r.penalidad_1_monto || 0) },
+            { name: 'Corte 3', 'Penalidad': Number(r.penalidad_2_monto || 0) },
+            { name: 'Corte 4', 'Penalidad': Number(r.penalidad_3_monto || 0) },
+          ],
+          dataKeys: ['Penalidad'],
+          colors: ['#ef4444'],
+        };
+      } else {
+        return {
+          type: 'horizontal_bar',
+          title: `Total Penalidades - ${mesNombre} ${añoStr}`,
+          data: typedData.slice(0, 10).map((r, i) => ({
+            name: r.agencia.length > 20 ? r.agencia.substring(0, 20) + '...' : r.agencia,
+            'Penalidades': Number(r.total_penalidades || 0),
+            fill: colors[i % colors.length],
+          })),
+          dataKeys: ['Penalidades'],
+          colors: ['#ef4444'],
+        };
+      }
+
+    case 'clawback':
+      if (typedData.length === 1) {
+        const r = typedData[0];
+        return {
+          type: 'bar',
+          title: `Clawbacks por Corte - ${r.agencia}`,
+          data: [
+            { name: 'Corte 2', 'Clawback': Number(r.clawback_1_monto || 0) },
+            { name: 'Corte 3', 'Clawback': Number(r.clawback_2_monto || 0) },
+            { name: 'Corte 4', 'Clawback': Number(r.clawback_3_monto || 0) },
+          ],
+          dataKeys: ['Clawback'],
+          colors: ['#f97316'],
+        };
+      } else {
+        return {
+          type: 'horizontal_bar',
+          title: `Total Clawbacks - ${mesNombre} ${añoStr}`,
+          data: typedData.slice(0, 10).map((r, i) => ({
+            name: r.agencia.length > 20 ? r.agencia.substring(0, 20) + '...' : r.agencia,
+            'Clawbacks': Number(r.total_clawbacks || 0),
+            fill: colors[i % colors.length],
+          })),
+          dataKeys: ['Clawbacks'],
+          colors: ['#f97316'],
+        };
+      }
+
+    case 'descuentos':
+      if (typedData.length === 1) {
+        const r = typedData[0];
+        return {
+          type: 'pie',
+          title: `Composición de Descuentos - ${r.agencia}`,
+          data: [
+            { name: 'Penalidades', value: Number(r.total_penalidades || 0), fill: '#ef4444' },
+            { name: 'Clawbacks', value: Number(r.total_clawbacks || 0), fill: '#f97316' },
+          ],
+          dataKeys: ['value'],
+          colors: ['#ef4444', '#f97316'],
+        };
+      } else {
+        return {
+          type: 'stacked_bar',
+          title: `Descuentos por Agencia - ${mesNombre} ${añoStr}`,
+          data: typedData.slice(0, 10).map((r) => ({
+            name: r.agencia.length > 15 ? r.agencia.substring(0, 15) + '...' : r.agencia,
+            'Penalidades': Number(r.total_penalidades || 0),
+            'Clawbacks': Number(r.total_clawbacks || 0),
+          })),
+          dataKeys: ['Penalidades', 'Clawbacks'],
+          colors: ['#ef4444', '#f97316'],
+        };
+      }
+
+    case 'altas':
+      if (typedData.length === 1) {
+        const r = typedData[0];
+        return {
+          type: 'bar',
+          title: `Altas por Corte - ${r.agencia}`,
+          data: [
+            { name: 'Corte 1', 'Altas': Number(r.corte_1 || 0) },
+            { name: 'Corte 2', 'Altas': Number(r.corte_2 || 0) },
+            { name: 'Corte 3', 'Altas': Number(r.corte_3 || 0) },
+            { name: 'Corte 4', 'Altas': Number(r.corte_4 || 0) },
+          ],
+          dataKeys: ['Altas'],
+          colors: ['#3b82f6'],
+        };
+      } else {
+        return {
+          type: 'bar',
+          title: `Total Altas por Agencia - ${mesNombre} ${añoStr}`,
+          data: typedData.slice(0, 10).map((r) => ({
+            name: r.agencia.length > 15 ? r.agencia.substring(0, 15) + '...' : r.agencia,
+            'Altas': Number(r.altas || 0),
+            'Meta': Number(r.meta || 0),
+          })),
+          dataKeys: ['Altas', 'Meta'],
+          colors: ['#3b82f6', '#94a3b8'],
+        };
+      }
+
+    case 'detalle':
+      if (typedData.length === 1) {
+        const r = typedData[0];
+        // Gráfico combinado mostrando desglose completo
+        return {
+          type: 'pie',
+          title: `Resumen Financiero - ${r.agencia}`,
+          data: [
+            { name: 'Neto Final', value: Math.max(0, Number(r.resultado_neto_final || 0)), fill: '#22c55e' },
+            { name: 'Penalidades', value: Number(r.total_penalidades || 0), fill: '#ef4444' },
+            { name: 'Clawbacks', value: Number(r.total_clawbacks || 0), fill: '#f97316' },
+          ].filter(item => item.value > 0),
+          dataKeys: ['value'],
+          colors: ['#22c55e', '#ef4444', '#f97316'],
+        };
+      } else {
+        return {
+          type: 'bar',
+          title: `Resumen por Agencia - ${mesNombre} ${añoStr}`,
+          data: typedData.slice(0, 8).map((r) => ({
+            name: r.agencia.length > 12 ? r.agencia.substring(0, 12) + '...' : r.agencia,
+            'Comisión': Number(r.comision_total || 0),
+            'Descuentos': Number(r.total_descuentos || 0),
+            'Neto': Number(r.resultado_neto_final || 0),
+          })),
+          dataKeys: ['Comisión', 'Descuentos', 'Neto'],
+          colors: ['#ff8300', '#ef4444', '#22c55e'],
+        };
+      }
+
+    default:
+      return null;
+  }
+}
+
 // Helper para convertir número de mes a nombre
 function obtenerNombreMes(mes: number): string {
   const meses = ['', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 
@@ -434,6 +663,9 @@ EJEMPLOS:
           finalResponse += `   💰 Neto Final: S/ ${totalNeto.toLocaleString('es-PE', { minimumFractionDigits: 2 })}`;
         }
 
+        // Generar datos para el gráfico
+        const chartData = generateChartData(typedData, tipo_consulta, mesNombre, añoStr);
+
         return NextResponse.json({
           response: finalResponse,
           conversationHistory: [
@@ -442,6 +674,7 @@ EJEMPLOS:
             { role: 'assistant', content: finalResponse },
           ],
           data,
+          chartData,
         });
       }
     }
