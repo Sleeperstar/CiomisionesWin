@@ -449,7 +449,7 @@ export default function ChatbotInterface() {
                 <div
                   className={`rounded-2xl px-4 py-3 ${message.role === 'user'
                     ? 'max-w-[75%] bg-gradient-to-br from-[#f53c00] to-[#ff8300] text-white'
-                    : 'max-w-[85%] bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100'
+                    : `${message.chartData ? 'w-full max-w-[95%]' : 'max-w-[85%]'} bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100`
                     }`}
                 >
                   <div className="text-sm whitespace-pre-wrap break-words">
