@@ -179,7 +179,7 @@ export default function ViewCorte4Table({ zona, mes, periodo }: Props) {
             <CardContent className="p-0 overflow-clip">
                 <div className="overflow-auto max-h-[500px] relative">
                     <Table className="text-xs">
-                        <TableHeader className="sticky top-0 bg-gradient-to-r from-green-100 to-emerald-100 dark:from-slate-800 dark:to-slate-700 z-10">
+                        <TableHeader className="sticky top-0 bg-gradient-to-r from-green-100 to-emerald-100 dark:from-slate-800 dark:to-slate-700 z-1">
                             <TableRow>
                                 <TableHead className="px-2 py-2"><SortButton columnKey="ruc">RUC</SortButton></TableHead>
                                 <TableHead className="px-2 py-2"><SortButton columnKey="agencia">AGENCIA</SortButton></TableHead>

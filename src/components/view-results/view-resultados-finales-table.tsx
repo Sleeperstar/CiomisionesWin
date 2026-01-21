@@ -340,7 +340,7 @@ export default function ViewResultadosFinalesTable({ zona, mes, periodo }: ViewR
             <CardContent className="p-0 relative overflow-clip">
                 <div className="overflow-auto max-h-[600px] max-w-full relative">
                     <Table className="relative">
-                        <TableHeader className="sticky top-0 bg-gradient-to-r from-emerald-100 to-teal-100 dark:from-slate-800 dark:to-slate-700 z-10">
+                        <TableHeader className="sticky top-0 bg-gradient-to-r from-emerald-100 to-teal-100 dark:from-slate-800 dark:to-slate-700 z-1">
                             <TableRow className="hover:bg-emerald-100 dark:hover:bg-slate-800">
                                 <TableHead className="whitespace-nowrap px-2 py-2 border-b-2 border-emerald-600">
                                     <SortButton columnKey="agencia">AGENCIA</SortButton>
