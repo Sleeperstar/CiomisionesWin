@@ -119,6 +119,9 @@ export default function DashboardCharts() {
     const [mes, setMes] = useState("0");
     const [eficienciaSort, setEficienciaSort] = useState<'comision' | 'eficiencia-asc' | 'eficiencia-desc'>('comision');
     
+    // Estado para verificar si estamos en el cliente (evita errores de SSR con cmdk)
+    const [mounted, setMounted] = useState(false);
+    
     // Estados para filtro de agencia
     const [agenciasDisponibles, setAgenciasDisponibles] = useState<AgenciaOption[]>([]);
     const [agenciasSeleccionadas, setAgenciasSeleccionadas] = useState<string[]>([]);
@@ -134,6 +137,11 @@ export default function DashboardCharts() {
     const agenciaInfo = agenciaUnicaSeleccionada 
         ? agenciasDisponibles.find(a => a.ruc === agenciaUnicaSeleccionada) 
         : null;
+
+    // Efecto para marcar que estamos en el cliente
+    useEffect(() => {
+        setMounted(true);
+    }, []);
 
     // Calcular KPIs (usando filteredData cuando hay agencias seleccionadas)
     const kpis: KPIs = useMemo(() => {
@@ -448,8 +456,8 @@ export default function DashboardCharts() {
                                 </SelectContent>
                             </Select>
 
-                            {/* Selector de Agencias */}
-                            {zona !== "todas" && mes !== "0" && (
+                            {/* Selector de Agencias - Solo se renderiza en el cliente para evitar errores de SSR */}
+                            {mounted && zona !== "todas" && mes !== "0" && (
                                 <Popover open={agenciaPopoverOpen} onOpenChange={setAgenciaPopoverOpen}>
                                     <PopoverTrigger asChild>
                                         <Button
