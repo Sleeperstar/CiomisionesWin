@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from 'react';
-import dynamic from 'next/dynamic';
 import { 
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
     PieChart, Pie, Cell, 
@@ -18,18 +17,8 @@ import { Icons } from "@/components/icons";
 import { 
     TrendingUp, TrendingDown, DollarSign, Users, Target, AlertTriangle,
     ArrowUpRight, ArrowDownRight, BarChart3, PieChartIcon, RefreshCw,
-    ArrowUpDown, ArrowUp, ArrowDown, Building2, Package
+    ArrowUpDown, ArrowUp, ArrowDown, Building2, Package, X
 } from "lucide-react";
-
-// Importar el selector de agencias dinámicamente para evitar errores de SSR con cmdk
-const AgenciaSelector = dynamic(() => import('./agencia-selector'), { 
-    ssr: false,
-    loading: () => (
-        <Button variant="outline" className="w-[250px] justify-between bg-white dark:bg-slate-800" disabled>
-            <span className="text-muted-foreground">Cargando...</span>
-        </Button>
-    )
-});
 
 // Colores corporativos
 const COLORS = {
@@ -130,7 +119,6 @@ export default function DashboardCharts() {
     // Estados para filtro de agencia
     const [agenciasDisponibles, setAgenciasDisponibles] = useState<AgenciaOption[]>([]);
     const [agenciasSeleccionadas, setAgenciasSeleccionadas] = useState<string[]>([]);
-    const [agenciaPopoverOpen, setAgenciaPopoverOpen] = useState(false);
     const [loadingAgencias, setLoadingAgencias] = useState(false);
     
     // Datos para gráficos de agencia individual
@@ -456,16 +444,50 @@ export default function DashboardCharts() {
                                 </SelectContent>
                             </Select>
 
-                            {/* Selector de Agencias - Cargado dinámicamente para evitar errores de SSR */}
+                            {/* Selector de Agencias */}
                             {zona !== "todas" && mes !== "0" && (
-                                <AgenciaSelector
-                                    agenciasDisponibles={agenciasDisponibles}
-                                    agenciasSeleccionadas={agenciasSeleccionadas}
-                                    setAgenciasSeleccionadas={setAgenciasSeleccionadas}
-                                    loadingAgencias={loadingAgencias}
-                                    open={agenciaPopoverOpen}
-                                    setOpen={setAgenciaPopoverOpen}
-                                />
+                                <div className="flex items-center gap-2">
+                                    <Select
+                                        value={agenciasSeleccionadas.length === 1 ? agenciasSeleccionadas[0] : "todas"}
+                                        onValueChange={(value) => {
+                                            if (value === "todas") {
+                                                setAgenciasSeleccionadas([]);
+                                            } else {
+                                                setAgenciasSeleccionadas([value]);
+                                            }
+                                        }}
+                                        disabled={loadingAgencias}
+                                    >
+                                        <SelectTrigger className="w-[280px] bg-white dark:bg-slate-800">
+                                            <div className="flex items-center gap-2">
+                                                <Building2 className="h-4 w-4 text-muted-foreground" />
+                                                <SelectValue placeholder={loadingAgencias ? "Cargando..." : "Seleccionar agencia"} />
+                                            </div>
+                                        </SelectTrigger>
+                                        <SelectContent className="max-h-[300px]">
+                                            <SelectItem value="todas">Todas las agencias</SelectItem>
+                                            {agenciasDisponibles.map((agencia) => (
+                                                <SelectItem key={agencia.ruc} value={agencia.ruc}>
+                                                    <div className="flex flex-col">
+                                                        <span>{agencia.agencia}</span>
+                                                        <span className="text-xs text-muted-foreground">{agencia.total_altas} altas</span>
+                                                    </div>
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                    {agenciasSeleccionadas.length > 0 && (
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-9 w-9 text-red-500 hover:text-red-600 hover:bg-red-50"
+                                            onClick={() => setAgenciasSeleccionadas([])}
+                                            title="Limpiar selección"
+                                        >
+                                            <X className="h-4 w-4" />
+                                        </Button>
+                                    )}
+                                </div>
                             )}
                         </div>
                         <div className="flex items-center gap-2">
