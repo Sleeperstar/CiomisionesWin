@@ -353,12 +353,6 @@ export default function DashboardCharts() {
         fetchProductos();
     }, [agenciaUnicaSeleccionada, zona, year, mes]);
 
-    // Filtrar datos por agencias seleccionadas
-    const filteredData = useMemo(() => {
-        if (agenciasSeleccionadas.length === 0) return data;
-        return data.filter(r => agenciasSeleccionadas.includes(r.ruc));
-    }, [data, agenciasSeleccionadas]);
-
     const formatCurrency = (value: number) => {
         if (value >= 1000000) {
             return `S/ ${(value / 1000000).toFixed(2)}M`;
