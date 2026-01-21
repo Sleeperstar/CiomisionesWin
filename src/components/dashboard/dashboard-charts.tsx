@@ -131,6 +131,12 @@ export default function DashboardCharts() {
         ? agenciasDisponibles.find(a => a.ruc === agenciaUnicaSeleccionada) 
         : null;
 
+    // Filtrar datos por agencias seleccionadas
+    const filteredData = useMemo(() => {
+        if (agenciasSeleccionadas.length === 0) return data;
+        return data.filter(r => agenciasSeleccionadas.includes(r.ruc));
+    }, [data, agenciasSeleccionadas]);
+
     // Calcular KPIs (usando filteredData cuando hay agencias seleccionadas)
     const kpis: KPIs = useMemo(() => {
         const dataToUse = agenciasSeleccionadas.length > 0 ? filteredData : data;
