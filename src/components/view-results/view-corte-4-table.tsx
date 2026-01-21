@@ -153,7 +153,7 @@ export default function ViewCorte4Table({ zona, mes, periodo }: Props) {
     }
 
     return (
-        <Card className="border-0 shadow-lg bg-gradient-to-br from-white to-green-50/30 dark:from-slate-900 dark:to-slate-800 overflow-hidden">
+        <Card className="border-0 shadow-lg bg-gradient-to-br from-white to-green-50/30 dark:from-slate-900 dark:to-slate-800 overflow-clip">
             <CardHeader className="pb-4 border-b text-white rounded-t-lg" style={{ background: 'linear-gradient(135deg, #059669 0%, #10b981 50%, #34d399 100%)' }}>
                 <div className="flex items-center justify-between flex-wrap gap-4">
                     <div>
@@ -176,8 +176,8 @@ export default function ViewCorte4Table({ zona, mes, periodo }: Props) {
                     </div>
                 </div>
             </CardHeader>
-            <CardContent className="p-0">
-                <div className="overflow-auto max-h-[500px]">
+            <CardContent className="p-0 overflow-clip">
+                <div className="overflow-auto max-h-[500px] relative">
                     <Table className="text-xs">
                         <TableHeader className="sticky top-0 bg-gradient-to-r from-green-100 to-emerald-100 dark:from-slate-800 dark:to-slate-700 z-10">
                             <TableRow>
