@@ -20,10 +20,9 @@ export default function DashboardPage() {
         </div>
         <div className="hidden md:flex items-center gap-2">
           <img 
-            src="/win-logo.png" 
+            src="/WinLogoDashboard.png" 
             alt="Win Logo" 
-            className="h-10 w-auto"
-            onError={(e) => { e.currentTarget.style.display = 'none' }}
+            className="h-12 w-auto"
           />
         </div>
       </div>

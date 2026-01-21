@@ -17,8 +17,11 @@ import { Icons } from "@/components/icons";
 import { 
     TrendingUp, TrendingDown, DollarSign, Users, Target, AlertTriangle,
     ArrowUpRight, ArrowDownRight, BarChart3, PieChartIcon, RefreshCw,
-    ArrowUpDown, ArrowUp, ArrowDown
+    ArrowUpDown, ArrowUp, ArrowDown, Building2, Package, X, Check, ChevronsUpDown
 } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { cn } from "@/lib/utils";
 
 // Colores corporativos
 const COLORS = {
@@ -68,6 +71,18 @@ interface KPIs {
     agenciasMarchaBlanca: number;
 }
 
+interface AgenciaOption {
+    ruc: string;
+    agencia: string;
+    total_altas: number;
+}
+
+interface ProductoData {
+    producto: string;
+    cantidad: number;
+    porcentaje: number;
+}
+
 const zonas = [
     { value: "todas", label: "Todas las Zonas" },
     { value: "LIMA", label: "Lima" },
@@ -103,10 +118,27 @@ export default function DashboardCharts() {
     const [year, setYear] = useState(String(currentYear));
     const [mes, setMes] = useState("0");
     const [eficienciaSort, setEficienciaSort] = useState<'comision' | 'eficiencia-asc' | 'eficiencia-desc'>('comision');
+    
+    // Estados para filtro de agencia
+    const [agenciasDisponibles, setAgenciasDisponibles] = useState<AgenciaOption[]>([]);
+    const [agenciasSeleccionadas, setAgenciasSeleccionadas] = useState<string[]>([]);
+    const [agenciaPopoverOpen, setAgenciaPopoverOpen] = useState(false);
+    const [loadingAgencias, setLoadingAgencias] = useState(false);
+    
+    // Datos para gráficos de agencia individual
+    const [productosData, setProductosData] = useState<ProductoData[]>([]);
+    const [loadingProductos, setLoadingProductos] = useState(false);
+    
+    // Verificar si hay una sola agencia seleccionada
+    const agenciaUnicaSeleccionada = agenciasSeleccionadas.length === 1 ? agenciasSeleccionadas[0] : null;
+    const agenciaInfo = agenciaUnicaSeleccionada 
+        ? agenciasDisponibles.find(a => a.ruc === agenciaUnicaSeleccionada) 
+        : null;
 
-    // Calcular KPIs
+    // Calcular KPIs (usando filteredData cuando hay agencias seleccionadas)
     const kpis: KPIs = useMemo(() => {
-        if (data.length === 0) return {
+        const dataToUse = agenciasSeleccionadas.length > 0 ? filteredData : data;
+        if (dataToUse.length === 0) return {
             totalAgencias: 0,
             totalAltas: 0,
             totalComision: 0,
@@ -118,20 +150,21 @@ export default function DashboardCharts() {
         };
 
         return {
-            totalAgencias: data.length,
-            totalAltas: data.reduce((sum, r) => sum + r.altas, 0),
-            totalComision: data.reduce((sum, r) => sum + r.comision_total, 0),
-            totalDescuentos: data.reduce((sum, r) => sum + r.total_descuentos, 0),
-            totalNetoFinal: data.reduce((sum, r) => sum + r.resultado_neto_final, 0),
-            avgMultiplicador: data.reduce((sum, r) => sum + r.multiplicador_final, 0) / data.length,
-            agenciasConDescuento: data.filter(r => r.total_descuentos > 0).length,
-            agenciasMarchaBlanca: data.filter(r => r.marcha_blanca === 'Sí').length,
+            totalAgencias: dataToUse.length,
+            totalAltas: dataToUse.reduce((sum, r) => sum + r.altas, 0),
+            totalComision: dataToUse.reduce((sum, r) => sum + r.comision_total, 0),
+            totalDescuentos: dataToUse.reduce((sum, r) => sum + r.total_descuentos, 0),
+            totalNetoFinal: dataToUse.reduce((sum, r) => sum + r.resultado_neto_final, 0),
+            avgMultiplicador: dataToUse.reduce((sum, r) => sum + r.multiplicador_final, 0) / dataToUse.length,
+            agenciasConDescuento: dataToUse.filter(r => r.total_descuentos > 0).length,
+            agenciasMarchaBlanca: dataToUse.filter(r => r.marcha_blanca === 'Sí').length,
         };
-    }, [data]);
+    }, [data, filteredData, agenciasSeleccionadas]);
 
-    // Datos para el gráfico de top 10 agencias
+    // Datos para el gráfico de top 10 agencias (solo cuando NO hay agencia única seleccionada)
     const topAgenciasData = useMemo(() => {
-        return [...data]
+        const dataToUse = agenciasSeleccionadas.length > 0 ? filteredData : data;
+        return [...dataToUse]
             .sort((a, b) => b.resultado_neto_final - a.resultado_neto_final)
             .slice(0, 10)
             .map(r => ({
@@ -140,16 +173,17 @@ export default function DashboardCharts() {
                 descuentos: r.total_descuentos,
                 neto: r.resultado_neto_final,
             }));
-    }, [data]);
+    }, [data, filteredData, agenciasSeleccionadas]);
 
-    // Datos para el gráfico de distribución de descuentos
+    // Datos para el gráfico de distribución de descuentos (usa datos filtrados)
     const descuentosDistribucion = useMemo(() => {
-        const totalPen1 = data.reduce((sum, r) => sum + r.penalidad_1_monto, 0);
-        const totalPen2 = data.reduce((sum, r) => sum + r.penalidad_2_monto, 0);
-        const totalPen3 = data.reduce((sum, r) => sum + r.penalidad_3_monto, 0);
-        const totalCB1 = data.reduce((sum, r) => sum + r.clawback_1_monto, 0);
-        const totalCB2 = data.reduce((sum, r) => sum + r.clawback_2_monto, 0);
-        const totalCB3 = data.reduce((sum, r) => sum + r.clawback_3_monto, 0);
+        const dataToUse = agenciasSeleccionadas.length > 0 ? filteredData : data;
+        const totalPen1 = dataToUse.reduce((sum, r) => sum + r.penalidad_1_monto, 0);
+        const totalPen2 = dataToUse.reduce((sum, r) => sum + r.penalidad_2_monto, 0);
+        const totalPen3 = dataToUse.reduce((sum, r) => sum + r.penalidad_3_monto, 0);
+        const totalCB1 = dataToUse.reduce((sum, r) => sum + r.clawback_1_monto, 0);
+        const totalCB2 = dataToUse.reduce((sum, r) => sum + r.clawback_2_monto, 0);
+        const totalCB3 = dataToUse.reduce((sum, r) => sum + r.clawback_3_monto, 0);
 
         return [
             { name: 'Penalidad 1', value: totalPen1, color: '#ef4444' },
@@ -159,12 +193,13 @@ export default function DashboardCharts() {
             { name: 'Clawback 2', value: totalCB2, color: '#a855f7' },
             { name: 'Clawback 3', value: totalCB3, color: '#c084fc' },
         ].filter(d => d.value > 0);
-    }, [data]);
+    }, [data, filteredData, agenciasSeleccionadas]);
 
-    // Datos para el gráfico de comisión vs neto por agencia
+    // Datos para el gráfico de comisión vs neto por agencia (usa datos filtrados)
     const comisionVsNetoData = useMemo(() => {
+        const dataToUse = agenciasSeleccionadas.length > 0 ? filteredData : data;
         // Primero calculamos la eficiencia para todos
-        const dataWithEficiencia = [...data].map(r => ({
+        const dataWithEficiencia = [...dataToUse].map(r => ({
             agencia: r.agencia,
             agenciaCorta: r.agencia.length > 12 ? r.agencia.substring(0, 12) + '...' : r.agencia,
             comision: r.comision_total,
@@ -183,14 +218,17 @@ export default function DashboardCharts() {
             sortedData = dataWithEficiencia.sort((a, b) => b.comision - a.comision);
         }
 
-        return sortedData.slice(0, 8).map(r => ({
+        // Si es una sola agencia, mostrar todo; si no, mostrar top 8
+        const limit = agenciaUnicaSeleccionada ? dataWithEficiencia.length : 8;
+
+        return sortedData.slice(0, limit).map(r => ({
             agencia: r.agenciaCorta,
             comision: r.comision,
             neto: r.neto,
             descuentos: r.descuentos,
             eficiencia: r.eficiencia,
         }));
-    }, [data, eficienciaSort]);
+    }, [data, filteredData, agenciasSeleccionadas, agenciaUnicaSeleccionada, eficienciaSort]);
 
     // Datos para el gráfico radial de eficiencia
     const eficienciaData = useMemo(() => {
@@ -253,6 +291,71 @@ export default function DashboardCharts() {
 
         fetchData();
     }, [zona, year, mes]);
+
+    // Cargar agencias disponibles cuando cambia zona/mes/año
+    useEffect(() => {
+        const fetchAgencias = async () => {
+            // Solo cargar si hay zona y mes específicos seleccionados
+            if (zona === "todas" || mes === "0") {
+                setAgenciasDisponibles([]);
+                setAgenciasSeleccionadas([]);
+                return;
+            }
+
+            setLoadingAgencias(true);
+            try {
+                const { data: agenciasData, error } = await supabase.rpc('get_agencias_por_periodo', {
+                    p_zona: zona.toLowerCase(),
+                    p_mes: parseInt(mes),
+                    p_year: parseInt(year)
+                });
+
+                if (error) throw error;
+                setAgenciasDisponibles(agenciasData || []);
+            } catch (error) {
+                console.error('Error fetching agencias:', error);
+                setAgenciasDisponibles([]);
+            }
+            setLoadingAgencias(false);
+        };
+
+        fetchAgencias();
+    }, [zona, year, mes]);
+
+    // Cargar productos cuando se selecciona una agencia única
+    useEffect(() => {
+        const fetchProductos = async () => {
+            if (!agenciaUnicaSeleccionada || zona === "todas" || mes === "0") {
+                setProductosData([]);
+                return;
+            }
+
+            setLoadingProductos(true);
+            try {
+                const { data: productosResult, error } = await supabase.rpc('get_productos_por_agencia', {
+                    p_zona: zona.toLowerCase(),
+                    p_ruc: agenciaUnicaSeleccionada,
+                    p_mes: parseInt(mes),
+                    p_year: parseInt(year)
+                });
+
+                if (error) throw error;
+                setProductosData(productosResult || []);
+            } catch (error) {
+                console.error('Error fetching productos:', error);
+                setProductosData([]);
+            }
+            setLoadingProductos(false);
+        };
+
+        fetchProductos();
+    }, [agenciaUnicaSeleccionada, zona, year, mes]);
+
+    // Filtrar datos por agencias seleccionadas
+    const filteredData = useMemo(() => {
+        if (agenciasSeleccionadas.length === 0) return data;
+        return data.filter(r => agenciasSeleccionadas.includes(r.ruc));
+    }, [data, agenciasSeleccionadas]);
 
     const formatCurrency = (value: number) => {
         if (value >= 1000000) {
@@ -331,7 +434,10 @@ export default function DashboardCharts() {
                                     ))}
                                 </SelectContent>
                             </Select>
-                            <Select value={mes} onValueChange={setMes}>
+                            <Select value={mes} onValueChange={(value) => {
+                                setMes(value);
+                                setAgenciasSeleccionadas([]); // Limpiar selección al cambiar mes
+                            }}>
                                 <SelectTrigger className="w-[160px] bg-white dark:bg-slate-800">
                                     <SelectValue placeholder="Mes" />
                                 </SelectTrigger>
@@ -341,10 +447,99 @@ export default function DashboardCharts() {
                                     ))}
                                 </SelectContent>
                             </Select>
+
+                            {/* Selector de Agencias */}
+                            {zona !== "todas" && mes !== "0" && (
+                                <Popover open={agenciaPopoverOpen} onOpenChange={setAgenciaPopoverOpen}>
+                                    <PopoverTrigger asChild>
+                                        <Button
+                                            variant="outline"
+                                            role="combobox"
+                                            aria-expanded={agenciaPopoverOpen}
+                                            className="w-[250px] justify-between bg-white dark:bg-slate-800"
+                                            disabled={loadingAgencias}
+                                        >
+                                            <div className="flex items-center gap-2 truncate">
+                                                <Building2 className="h-4 w-4 shrink-0 text-muted-foreground" />
+                                                {loadingAgencias ? (
+                                                    <span className="text-muted-foreground">Cargando...</span>
+                                                ) : agenciasSeleccionadas.length === 0 ? (
+                                                    <span className="text-muted-foreground">Todas las agencias</span>
+                                                ) : agenciasSeleccionadas.length === 1 ? (
+                                                    <span className="truncate">
+                                                        {agenciasDisponibles.find(a => a.ruc === agenciasSeleccionadas[0])?.agencia || agenciasSeleccionadas[0]}
+                                                    </span>
+                                                ) : (
+                                                    <span>{agenciasSeleccionadas.length} agencias</span>
+                                                )}
+                                            </div>
+                                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-[300px] p-0" align="start">
+                                        <Command>
+                                            <CommandInput placeholder="Buscar agencia..." />
+                                            <CommandList>
+                                                <CommandEmpty>No se encontraron agencias</CommandEmpty>
+                                                <CommandGroup>
+                                                    {agenciasDisponibles.map((agencia) => (
+                                                        <CommandItem
+                                                            key={agencia.ruc}
+                                                            value={agencia.agencia}
+                                                            onSelect={() => {
+                                                                setAgenciasSeleccionadas(prev => {
+                                                                    if (prev.includes(agencia.ruc)) {
+                                                                        return prev.filter(r => r !== agencia.ruc);
+                                                                    } else {
+                                                                        return [...prev, agencia.ruc];
+                                                                    }
+                                                                });
+                                                            }}
+                                                        >
+                                                            <Check
+                                                                className={cn(
+                                                                    "mr-2 h-4 w-4",
+                                                                    agenciasSeleccionadas.includes(agencia.ruc) ? "opacity-100" : "opacity-0"
+                                                                )}
+                                                            />
+                                                            <div className="flex flex-col flex-1 min-w-0">
+                                                                <span className="truncate">{agencia.agencia}</span>
+                                                                <span className="text-xs text-muted-foreground">
+                                                                    {agencia.total_altas} altas
+                                                                </span>
+                                                            </div>
+                                                        </CommandItem>
+                                                    ))}
+                                                </CommandGroup>
+                                            </CommandList>
+                                        </Command>
+                                        {agenciasSeleccionadas.length > 0 && (
+                                            <div className="border-t p-2">
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="w-full text-red-500 hover:text-red-600 hover:bg-red-50"
+                                                    onClick={() => setAgenciasSeleccionadas([])}
+                                                >
+                                                    <X className="h-4 w-4 mr-2" />
+                                                    Limpiar selección
+                                                </Button>
+                                            </div>
+                                        )}
+                                    </PopoverContent>
+                                </Popover>
+                            )}
                         </div>
-                        <Badge variant="outline" className="text-sm py-2 px-4">
-                            {data.length} registros encontrados
-                        </Badge>
+                        <div className="flex items-center gap-2">
+                            {agenciasSeleccionadas.length > 0 && (
+                                <Badge variant="secondary" className="text-sm py-2 px-4 bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300">
+                                    {agenciasSeleccionadas.length} agencia{agenciasSeleccionadas.length > 1 ? 's' : ''} seleccionada{agenciasSeleccionadas.length > 1 ? 's' : ''}
+                                </Badge>
+                            )}
+                            <Badge variant="outline" className="text-sm py-2 px-4">
+                                {agenciasSeleccionadas.length > 0 ? filteredData.length : data.length} registros
+                            </Badge>
+                        </div>
                     </div>
                 </CardContent>
             </Card>
@@ -391,31 +586,94 @@ export default function DashboardCharts() {
 
             {/* Gráficos principales */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Top 10 Agencias */}
+                {/* Gráfico condicional: Top 10 Agencias o Top 10 Productos */}
                 <Card className="border-0 shadow-lg overflow-hidden">
-                    <CardHeader className="bg-gradient-to-r from-[#f53c00] to-[#ff8300] text-white">
+                    <CardHeader className={`bg-gradient-to-r ${agenciaUnicaSeleccionada ? 'from-[#8b5cf6] to-[#a855f7]' : 'from-[#f53c00] to-[#ff8300]'} text-white`}>
                         <CardTitle className="flex items-center gap-2">
-                            <BarChart3 className="h-5 w-5" />
-                            Top 10 Agencias por Resultado Neto
+                            {agenciaUnicaSeleccionada ? (
+                                <>
+                                    <Package className="h-5 w-5" />
+                                    Top 10 Productos Más Vendidos
+                                </>
+                            ) : (
+                                <>
+                                    <BarChart3 className="h-5 w-5" />
+                                    Top 10 Agencias por Resultado Neto
+                                </>
+                            )}
                         </CardTitle>
-                        <CardDescription className="text-orange-100">
-                            Ranking de las agencias con mayor comisión neta
+                        <CardDescription className={agenciaUnicaSeleccionada ? 'text-purple-100' : 'text-orange-100'}>
+                            {agenciaUnicaSeleccionada 
+                                ? `Productos de ${agenciaInfo?.agencia || 'la agencia'}`
+                                : 'Ranking de las agencias con mayor comisión neta'
+                            }
                         </CardDescription>
                     </CardHeader>
                     <CardContent className="pt-6">
-                        {topAgenciasData.length > 0 ? (
-                            <ResponsiveContainer width="100%" height={350}>
-                                <BarChart data={topAgenciasData} layout="vertical" margin={{ left: 20, right: 20 }}>
-                                    <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-                                    <XAxis type="number" tickFormatter={(v) => formatCurrency(v)} />
-                                    <YAxis dataKey="agencia" type="category" width={100} tick={{ fontSize: 11 }} />
-                                    <Tooltip content={<CustomTooltip />} />
-                                    <Legend />
-                                    <Bar dataKey="neto" name="Neto Final" fill={COLORS.success} radius={[0, 4, 4, 0]} />
-                                </BarChart>
-                            </ResponsiveContainer>
+                        {agenciaUnicaSeleccionada ? (
+                            // Gráfico de productos para agencia única
+                            loadingProductos ? (
+                                <div className="flex items-center justify-center h-[350px]">
+                                    <Icons.Spinner className="h-8 w-8 animate-spin text-purple-500" />
+                                </div>
+                            ) : productosData.length > 0 ? (
+                                <ResponsiveContainer width="100%" height={350}>
+                                    <BarChart data={productosData} layout="vertical" margin={{ left: 20, right: 30 }}>
+                                        <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                                        <XAxis type="number" />
+                                        <YAxis 
+                                            dataKey="producto" 
+                                            type="category" 
+                                            width={150} 
+                                            tick={{ fontSize: 10 }}
+                                            tickFormatter={(v) => v.length > 25 ? v.substring(0, 25) + '...' : v}
+                                        />
+                                        <Tooltip 
+                                            content={({ active, payload, label }) => {
+                                                if (active && payload && payload.length) {
+                                                    return (
+                                                        <div className="bg-white dark:bg-slate-800 p-3 rounded-lg shadow-lg border border-slate-200 dark:border-slate-700">
+                                                            <p className="font-semibold text-sm mb-2">{label}</p>
+                                                            <p className="text-xs text-purple-600">Cantidad: {payload[0].value}</p>
+                                                            <p className="text-xs text-slate-500">
+                                                                {productosData.find(p => p.producto === label)?.porcentaje || 0}% del total
+                                                            </p>
+                                                        </div>
+                                                    );
+                                                }
+                                                return null;
+                                            }}
+                                        />
+                                        <Bar dataKey="cantidad" name="Cantidad" fill={COLORS.purple} radius={[0, 4, 4, 0]}>
+                                            {productosData.map((entry, index) => (
+                                                <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                                            ))}
+                                        </Bar>
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            ) : (
+                                <div className="flex flex-col items-center justify-center h-[350px] text-muted-foreground">
+                                    <Package className="h-16 w-16 mb-4 opacity-50" />
+                                    <p className="text-lg font-medium">Sin productos</p>
+                                    <p className="text-sm">No hay ventas en este periodo</p>
+                                </div>
+                            )
                         ) : (
-                            <EmptyState />
+                            // Gráfico de top agencias (modo normal)
+                            topAgenciasData.length > 0 ? (
+                                <ResponsiveContainer width="100%" height={350}>
+                                    <BarChart data={topAgenciasData} layout="vertical" margin={{ left: 20, right: 20 }}>
+                                        <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                                        <XAxis type="number" tickFormatter={(v) => formatCurrency(v)} />
+                                        <YAxis dataKey="agencia" type="category" width={100} tick={{ fontSize: 11 }} />
+                                        <Tooltip content={<CustomTooltip />} />
+                                        <Legend />
+                                        <Bar dataKey="neto" name="Neto Final" fill={COLORS.success} radius={[0, 4, 4, 0]} />
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            ) : (
+                                <EmptyState />
+                            )
                         )}
                     </CardContent>
                 </Card>
@@ -426,9 +684,17 @@ export default function DashboardCharts() {
                         <CardTitle className="flex items-center gap-2">
                             <PieChartIcon className="h-5 w-5" />
                             Distribución de Descuentos
+                            {agenciaUnicaSeleccionada && (
+                                <Badge variant="outline" className="ml-2 bg-white/20 border-white/40 text-xs">
+                                    1 agencia
+                                </Badge>
+                            )}
                         </CardTitle>
                         <CardDescription className="text-purple-100">
-                            Penalidades y Clawbacks por tipo
+                            {agenciaUnicaSeleccionada 
+                                ? `Penalidades y Clawbacks de ${agenciaInfo?.agencia || 'la agencia'}`
+                                : 'Penalidades y Clawbacks por tipo'
+                            }
                         </CardDescription>
                     </CardHeader>
                     <CardContent className="pt-6">
@@ -471,10 +737,16 @@ export default function DashboardCharts() {
                         <div>
                             <CardTitle className="flex items-center gap-2">
                                 <TrendingUp className="h-5 w-5" />
-                                Comisión Bruta vs Neto Final por Agencia
+                                {agenciaUnicaSeleccionada 
+                                    ? 'Comisión Bruta vs Neto Final'
+                                    : 'Comisión Bruta vs Neto Final por Agencia'
+                                }
                             </CardTitle>
                             <CardDescription className="text-emerald-100">
-                                Comparativa de comisión total y resultado neto (Top 8 agencias)
+                                {agenciaUnicaSeleccionada 
+                                    ? `Resultado de ${agenciaInfo?.agencia || 'la agencia'}`
+                                    : 'Comparativa de comisión total y resultado neto (Top 8 agencias)'
+                                }
                             </CardDescription>
                         </div>
                         <div className="flex items-center gap-2">
@@ -542,66 +814,131 @@ export default function DashboardCharts() {
                 </CardContent>
             </Card>
 
-            {/* Resumen de Agencias más afectadas */}
-            <Card className="border-0 shadow-lg overflow-hidden">
-                <CardHeader className="bg-gradient-to-r from-[#ef4444] to-[#f97316] text-white">
-                    <CardTitle className="flex items-center gap-2">
-                        <AlertTriangle className="h-5 w-5" />
-                        Agencias con Mayor Descuento
-                    </CardTitle>
-                    <CardDescription className="text-red-100">
-                        Top 5 agencias con mayores penalidades y clawbacks
-                    </CardDescription>
-                </CardHeader>
-                <CardContent className="pt-6">
-                    {data.filter(r => r.total_descuentos > 0).length > 0 ? (
-                        <div className="space-y-4">
-                            {[...data]
-                                .filter(r => r.total_descuentos > 0)
-                                .sort((a, b) => b.total_descuentos - a.total_descuentos)
-                                .slice(0, 5)
-                                .map((agencia, index) => (
-                                    <div key={agencia.ruc} className="flex items-center gap-4 p-4 rounded-lg bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
-                                        <div className={`flex items-center justify-center w-10 h-10 rounded-full font-bold text-white ${
-                                            index === 0 ? 'bg-red-500' : index === 1 ? 'bg-orange-500' : 'bg-yellow-500'
-                                        }`}>
-                                            {index + 1}
+            {/* Resumen de Agencias más afectadas - Solo se muestra cuando NO hay agencia única seleccionada */}
+            {!agenciaUnicaSeleccionada && (
+                <Card className="border-0 shadow-lg overflow-hidden">
+                    <CardHeader className="bg-gradient-to-r from-[#ef4444] to-[#f97316] text-white">
+                        <CardTitle className="flex items-center gap-2">
+                            <AlertTriangle className="h-5 w-5" />
+                            Agencias con Mayor Descuento
+                        </CardTitle>
+                        <CardDescription className="text-red-100">
+                            Top 5 agencias con mayores penalidades y clawbacks
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent className="pt-6">
+                        {data.filter(r => r.total_descuentos > 0).length > 0 ? (
+                            <div className="space-y-4">
+                                {[...data]
+                                    .filter(r => r.total_descuentos > 0)
+                                    .sort((a, b) => b.total_descuentos - a.total_descuentos)
+                                    .slice(0, 5)
+                                    .map((agencia, index) => (
+                                        <div key={agencia.ruc} className="flex items-center gap-4 p-4 rounded-lg bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+                                            <div className={`flex items-center justify-center w-10 h-10 rounded-full font-bold text-white ${
+                                                index === 0 ? 'bg-red-500' : index === 1 ? 'bg-orange-500' : 'bg-yellow-500'
+                                            }`}>
+                                                {index + 1}
+                                            </div>
+                                            <div className="flex-1">
+                                                <p className="font-semibold">{agencia.agencia}</p>
+                                                <p className="text-sm text-muted-foreground">RUC: {agencia.ruc}</p>
+                                            </div>
+                                            <div className="text-right">
+                                                <p className="text-sm text-muted-foreground">Comisión</p>
+                                                <p className="font-semibold text-blue-600">{formatCurrencyFull(agencia.comision_total)}</p>
+                                            </div>
+                                            <div className="text-right">
+                                                <p className="text-sm text-muted-foreground">Descuentos</p>
+                                                <p className="font-bold text-red-600">{formatCurrencyFull(agencia.total_descuentos)}</p>
+                                            </div>
+                                            <div className="text-right">
+                                                <p className="text-sm text-muted-foreground">Neto</p>
+                                                <p className="font-bold text-emerald-600">{formatCurrencyFull(agencia.resultado_neto_final)}</p>
+                                            </div>
+                                            <Badge variant="outline" className={`${
+                                                (agencia.total_descuentos / agencia.comision_total * 100) > 20 
+                                                    ? 'border-red-500 text-red-500' 
+                                                    : 'border-yellow-500 text-yellow-500'
+                                            }`}>
+                                                -{((agencia.total_descuentos / agencia.comision_total) * 100).toFixed(1)}%
+                                            </Badge>
                                         </div>
-                                        <div className="flex-1">
-                                            <p className="font-semibold">{agencia.agencia}</p>
-                                            <p className="text-sm text-muted-foreground">RUC: {agencia.ruc}</p>
-                                        </div>
-                                        <div className="text-right">
-                                            <p className="text-sm text-muted-foreground">Comisión</p>
-                                            <p className="font-semibold text-blue-600">{formatCurrencyFull(agencia.comision_total)}</p>
-                                        </div>
-                                        <div className="text-right">
-                                            <p className="text-sm text-muted-foreground">Descuentos</p>
-                                            <p className="font-bold text-red-600">{formatCurrencyFull(agencia.total_descuentos)}</p>
-                                        </div>
-                                        <div className="text-right">
-                                            <p className="text-sm text-muted-foreground">Neto</p>
-                                            <p className="font-bold text-emerald-600">{formatCurrencyFull(agencia.resultado_neto_final)}</p>
-                                        </div>
-                                        <Badge variant="outline" className={`${
-                                            (agencia.total_descuentos / agencia.comision_total * 100) > 20 
-                                                ? 'border-red-500 text-red-500' 
-                                                : 'border-yellow-500 text-yellow-500'
-                                        }`}>
-                                            -{((agencia.total_descuentos / agencia.comision_total) * 100).toFixed(1)}%
+                                    ))}
+                            </div>
+                        ) : (
+                            <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+                                <Target className="h-16 w-16 mb-4 text-green-500" />
+                                <p className="text-lg font-medium">¡Excelente!</p>
+                                <p className="text-sm">No hay agencias con descuentos en este periodo</p>
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+            )}
+
+            {/* Información detallada de la agencia seleccionada */}
+            {agenciaUnicaSeleccionada && agenciaInfo && filteredData.length > 0 && (
+                <Card className="border-0 shadow-lg overflow-hidden">
+                    <CardHeader className="bg-gradient-to-r from-[#3b82f6] to-[#1d4ed8] text-white">
+                        <CardTitle className="flex items-center gap-2">
+                            <Building2 className="h-5 w-5" />
+                            Resumen de {agenciaInfo.agencia}
+                        </CardTitle>
+                        <CardDescription className="text-blue-100">
+                            Detalles de comisiones y descuentos de la agencia
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent className="pt-6">
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            {filteredData.map((agencia) => (
+                                <React.Fragment key={agencia.ruc}>
+                                    <div className="p-4 rounded-lg bg-blue-50 dark:bg-blue-900/20">
+                                        <p className="text-sm text-muted-foreground">Comisión Bruta</p>
+                                        <p className="text-xl font-bold text-blue-600">{formatCurrencyFull(agencia.comision_total)}</p>
+                                    </div>
+                                    <div className="p-4 rounded-lg bg-red-50 dark:bg-red-900/20">
+                                        <p className="text-sm text-muted-foreground">Total Descuentos</p>
+                                        <p className="text-xl font-bold text-red-600">{formatCurrencyFull(agencia.total_descuentos)}</p>
+                                    </div>
+                                    <div className="p-4 rounded-lg bg-emerald-50 dark:bg-emerald-900/20">
+                                        <p className="text-sm text-muted-foreground">Neto Final</p>
+                                        <p className="text-xl font-bold text-emerald-600">{formatCurrencyFull(agencia.resultado_neto_final)}</p>
+                                    </div>
+                                    <div className="p-4 rounded-lg bg-purple-50 dark:bg-purple-900/20">
+                                        <p className="text-sm text-muted-foreground">Eficiencia</p>
+                                        <p className="text-xl font-bold text-purple-600">
+                                            {agencia.comision_total > 0 
+                                                ? ((agencia.resultado_neto_final / agencia.comision_total) * 100).toFixed(1) 
+                                                : 100}%
+                                        </p>
+                                    </div>
+                                </React.Fragment>
+                            ))}
+                        </div>
+                        <div className="mt-6 grid grid-cols-2 md:grid-cols-3 gap-4">
+                            {filteredData.map((agencia) => (
+                                <React.Fragment key={agencia.ruc + '-details'}>
+                                    <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-800/50">
+                                        <p className="text-xs text-muted-foreground">Altas Totales</p>
+                                        <p className="text-lg font-semibold">{agencia.altas}</p>
+                                    </div>
+                                    <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-800/50">
+                                        <p className="text-xs text-muted-foreground">Multiplicador</p>
+                                        <p className="text-lg font-semibold">x{agencia.multiplicador_final}</p>
+                                    </div>
+                                    <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-800/50">
+                                        <p className="text-xs text-muted-foreground">Marcha Blanca</p>
+                                        <Badge variant={agencia.marcha_blanca === 'Sí' ? 'default' : 'outline'}>
+                                            {agencia.marcha_blanca}
                                         </Badge>
                                     </div>
-                                ))}
+                                </React.Fragment>
+                            ))}
                         </div>
-                    ) : (
-                        <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-                            <Target className="h-16 w-16 mb-4 text-green-500" />
-                            <p className="text-lg font-medium">¡Excelente!</p>
-                            <p className="text-sm">No hay agencias con descuentos en este periodo</p>
-                        </div>
-                    )}
-                </CardContent>
-            </Card>
+                    </CardContent>
+                </Card>
+            )}
         </div>
     );
 }
