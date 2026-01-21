@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from 'react';
+import dynamic from 'next/dynamic';
 import { 
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
     PieChart, Pie, Cell, 
@@ -17,11 +18,18 @@ import { Icons } from "@/components/icons";
 import { 
     TrendingUp, TrendingDown, DollarSign, Users, Target, AlertTriangle,
     ArrowUpRight, ArrowDownRight, BarChart3, PieChartIcon, RefreshCw,
-    ArrowUpDown, ArrowUp, ArrowDown, Building2, Package, X, Check, ChevronsUpDown
+    ArrowUpDown, ArrowUp, ArrowDown, Building2, Package
 } from "lucide-react";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { cn } from "@/lib/utils";
+
+// Importar el selector de agencias dinámicamente para evitar errores de SSR con cmdk
+const AgenciaSelector = dynamic(() => import('./agencia-selector'), { 
+    ssr: false,
+    loading: () => (
+        <Button variant="outline" className="w-[250px] justify-between bg-white dark:bg-slate-800" disabled>
+            <span className="text-muted-foreground">Cargando...</span>
+        </Button>
+    )
+});
 
 // Colores corporativos
 const COLORS = {
@@ -119,9 +127,6 @@ export default function DashboardCharts() {
     const [mes, setMes] = useState("0");
     const [eficienciaSort, setEficienciaSort] = useState<'comision' | 'eficiencia-asc' | 'eficiencia-desc'>('comision');
     
-    // Estado para verificar si estamos en el cliente (evita errores de SSR con cmdk)
-    const [mounted, setMounted] = useState(false);
-    
     // Estados para filtro de agencia
     const [agenciasDisponibles, setAgenciasDisponibles] = useState<AgenciaOption[]>([]);
     const [agenciasSeleccionadas, setAgenciasSeleccionadas] = useState<string[]>([]);
@@ -137,11 +142,6 @@ export default function DashboardCharts() {
     const agenciaInfo = agenciaUnicaSeleccionada 
         ? agenciasDisponibles.find(a => a.ruc === agenciaUnicaSeleccionada) 
         : null;
-
-    // Efecto para marcar que estamos en el cliente
-    useEffect(() => {
-        setMounted(true);
-    }, []);
 
     // Calcular KPIs (usando filteredData cuando hay agencias seleccionadas)
     const kpis: KPIs = useMemo(() => {
@@ -456,86 +456,16 @@ export default function DashboardCharts() {
                                 </SelectContent>
                             </Select>
 
-                            {/* Selector de Agencias - Solo se renderiza en el cliente para evitar errores de SSR */}
-                            {mounted && zona !== "todas" && mes !== "0" && (
-                                <Popover open={agenciaPopoverOpen} onOpenChange={setAgenciaPopoverOpen}>
-                                    <PopoverTrigger asChild>
-                                        <Button
-                                            variant="outline"
-                                            role="combobox"
-                                            aria-expanded={agenciaPopoverOpen}
-                                            className="w-[250px] justify-between bg-white dark:bg-slate-800"
-                                            disabled={loadingAgencias}
-                                        >
-                                            <div className="flex items-center gap-2 truncate">
-                                                <Building2 className="h-4 w-4 shrink-0 text-muted-foreground" />
-                                                {loadingAgencias ? (
-                                                    <span className="text-muted-foreground">Cargando...</span>
-                                                ) : agenciasSeleccionadas.length === 0 ? (
-                                                    <span className="text-muted-foreground">Todas las agencias</span>
-                                                ) : agenciasSeleccionadas.length === 1 ? (
-                                                    <span className="truncate">
-                                                        {agenciasDisponibles.find(a => a.ruc === agenciasSeleccionadas[0])?.agencia || agenciasSeleccionadas[0]}
-                                                    </span>
-                                                ) : (
-                                                    <span>{agenciasSeleccionadas.length} agencias</span>
-                                                )}
-                                            </div>
-                                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                                        </Button>
-                                    </PopoverTrigger>
-                                    <PopoverContent className="w-[300px] p-0" align="start">
-                                        <Command>
-                                            <CommandInput placeholder="Buscar agencia..." />
-                                            <CommandList>
-                                                <CommandEmpty>No se encontraron agencias</CommandEmpty>
-                                                <CommandGroup>
-                                                    {agenciasDisponibles.map((agencia) => (
-                                                        <CommandItem
-                                                            key={agencia.ruc}
-                                                            value={agencia.agencia}
-                                                            onSelect={() => {
-                                                                setAgenciasSeleccionadas(prev => {
-                                                                    if (prev.includes(agencia.ruc)) {
-                                                                        return prev.filter(r => r !== agencia.ruc);
-                                                                    } else {
-                                                                        return [...prev, agencia.ruc];
-                                                                    }
-                                                                });
-                                                            }}
-                                                        >
-                                                            <Check
-                                                                className={cn(
-                                                                    "mr-2 h-4 w-4",
-                                                                    agenciasSeleccionadas.includes(agencia.ruc) ? "opacity-100" : "opacity-0"
-                                                                )}
-                                                            />
-                                                            <div className="flex flex-col flex-1 min-w-0">
-                                                                <span className="truncate">{agencia.agencia}</span>
-                                                                <span className="text-xs text-muted-foreground">
-                                                                    {agencia.total_altas} altas
-                                                                </span>
-                                                            </div>
-                                                        </CommandItem>
-                                                    ))}
-                                                </CommandGroup>
-                                            </CommandList>
-                                        </Command>
-                                        {agenciasSeleccionadas.length > 0 && (
-                                            <div className="border-t p-2">
-                                                <Button
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    className="w-full text-red-500 hover:text-red-600 hover:bg-red-50"
-                                                    onClick={() => setAgenciasSeleccionadas([])}
-                                                >
-                                                    <X className="h-4 w-4 mr-2" />
-                                                    Limpiar selección
-                                                </Button>
-                                            </div>
-                                        )}
-                                    </PopoverContent>
-                                </Popover>
+                            {/* Selector de Agencias - Cargado dinámicamente para evitar errores de SSR */}
+                            {zona !== "todas" && mes !== "0" && (
+                                <AgenciaSelector
+                                    agenciasDisponibles={agenciasDisponibles}
+                                    agenciasSeleccionadas={agenciasSeleccionadas}
+                                    setAgenciasSeleccionadas={setAgenciasSeleccionadas}
+                                    loadingAgencias={loadingAgencias}
+                                    open={agenciaPopoverOpen}
+                                    setOpen={setAgenciaPopoverOpen}
+                                />
                             )}
                         </div>
                         <div className="flex items-center gap-2">
