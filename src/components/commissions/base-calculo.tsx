@@ -57,7 +57,8 @@ export default function BaseCalculo({ corte, zona, mes, year = '2025' }: { corte
                     .select('*', { count: 'exact', head: false })
                     .not('FECHA_VALIDACION', 'is', null)
                     .gte('FECHA_INSTALADO', startDate)
-                    .lt('FECHA_INSTALADO', endDate);
+                    .lt('FECHA_INSTALADO', endDate)
+                    .eq('TIPO_ESTADO', 'Validado');  // Filtrar solo registros validados
 
                 if (zona === 'lima') {
                     query = query.eq('CANAL', 'Agencias');
@@ -72,7 +73,8 @@ export default function BaseCalculo({ corte, zona, mes, year = '2025' }: { corte
                     .select('*', { count: 'exact', head: true })
                     .not('FECHA_VALIDACION', 'is', null)
                     .gte('FECHA_INSTALADO', startDate)
-                    .lt('FECHA_INSTALADO', endDate);
+                    .lt('FECHA_INSTALADO', endDate)
+                    .eq('TIPO_ESTADO', 'Validado');  // Filtrar solo registros validados
 
                 if (zona === 'lima') {
                     countQuery.eq('CANAL', 'Agencias');

@@ -240,6 +240,7 @@ BEGIN
                 AND sr."FECHA_INSTALADO" >= start_date
                 AND sr."FECHA_INSTALADO" < end_date
                 AND (LOWER(p_zona) = 'provincia' OR sr."CANAL" = 'Agencias')
+                AND sr."TIPO_ESTADO" = 'Validado'
             GROUP BY sr."DNI_ASESOR", sr."ASESOR"
         ) ventas
         LEFT JOIN "Parametros" p ON 
