@@ -10,11 +10,32 @@ import { useToast } from "@/hooks/use-toast";
 import { Icons } from "@/components/icons";
 import { Badge } from "@/components/ui/badge";
 
+const PERIODO_V2_INICIO = 202512;
+
+const GESTION_STYLES: Record<string, { badge: string; border: string; label: string }> = {
+    VERTICAL: {
+        badge: 'bg-emerald-100 text-emerald-700 border border-emerald-400',
+        border: 'border-l-4 border-l-emerald-500',
+        label: 'Vertical',
+    },
+    HORIZONTAL: {
+        badge: 'bg-sky-100 text-sky-700 border border-sky-400',
+        border: 'border-l-4 border-l-sky-500',
+        label: 'Horizontal',
+    },
+    MARCHA_BLANCA: {
+        badge: 'bg-amber-100 text-amber-700 border border-amber-400',
+        border: 'border-l-4 border-l-amber-500',
+        label: 'M. Blanca',
+    },
+};
+
 interface ResultadoFinal {
     periodo: number;
     zona: string;
     ruc: string;
     agencia: string;
+    gestion: string | null;
     meta: number | null;
     top: string | null;
     altas: number;
@@ -69,6 +90,7 @@ export default function ViewResultadosFinalesTable({ zona, mes, periodo }: ViewR
     const { toast } = useToast();
     const [sortConfig, setSortConfig] = useState<{ key: keyof ResultadoFinal; direction: 'ascending' | 'descending' } | null>(null);
     const [totals, setTotals] = useState<Totals | null>(null);
+    const isV2 = periodo >= PERIODO_V2_INICIO;
 
     const sortedData = useMemo(() => {
         let sortableItems = [...data];
@@ -116,6 +138,7 @@ export default function ViewResultadosFinalesTable({ zona, mes, periodo }: ViewR
                     zona: row.zona,
                     ruc: row.ruc,
                     agencia: row.agencia,
+                    gestion: row.gestion || null,
                     meta: row.meta,
                     top: row.top || 'REGULAR',
                     altas: Number(row.altas) || 0,
@@ -196,7 +219,9 @@ export default function ViewResultadosFinalesTable({ zona, mes, periodo }: ViewR
 
         // Crear CSV
         const headers = [
-            'RUC', 'Agencia', 'Meta', 'Top', 'Altas', '% Cumpl.', 'M. Blanca', 'Bono ARPU',
+            'RUC', 'Agencia',
+            ...(isV2 ? ['Gestión'] : []),
+            'Meta', 'Top', 'Altas', '% Cumpl.', 'M. Blanca', 'Bono ARPU',
             'Mult. Final', 'Corte 1', 'Corte 2', 'Corte 3', 'Corte 4',
             'Comisión Total', 'Pago Corte 1', 'Pago Corte 2',
             'Penalidad 1', 'Penalidad 2', 'Penalidad 3', 'Total Penalidades',
@@ -209,6 +234,7 @@ export default function ViewResultadosFinalesTable({ zona, mes, periodo }: ViewR
             ...data.map(row => [
                 row.ruc,
                 `"${row.agencia}"`,
+                ...(isV2 ? [row.gestion || '-'] : []),
                 row.meta !== null ? row.meta : '-',
                 row.top,
                 row.altas,
@@ -287,7 +313,7 @@ export default function ViewResultadosFinalesTable({ zona, mes, periodo }: ViewR
                     <AlertTriangle className="h-12 w-12 text-yellow-500 mb-4" />
                     <h3 className="text-lg font-semibold mb-2">Sin datos disponibles</h3>
                     <p className="text-muted-foreground">
-                        No hay resultados finales para este periodo. Asegúrate de haber guardado los datos del Corte 2.
+                        No hay resultados finales para este periodo. Asegúrate de haber guardado al menos los datos del Corte 1.
                     </p>
                 </CardContent>
             </Card>
@@ -305,7 +331,12 @@ export default function ViewResultadosFinalesTable({ zona, mes, periodo }: ViewR
                                 Resultados Finales Consolidados
                             </CardTitle>
                             <CardDescription className="text-emerald-100 mt-1">
-                                {data.length} agencias • Periodo {periodo} • {zona.charAt(0).toUpperCase() + zona.slice(1)}
+                                {data.length} registros • Periodo {periodo} • {zona.charAt(0).toUpperCase() + zona.slice(1)}
+                                {isV2 && (
+                                    <span className="ml-2">
+                                        ({data.filter(r => r.gestion === 'VERTICAL').length}V / {data.filter(r => r.gestion === 'HORIZONTAL').length}H / {data.filter(r => r.gestion === 'MARCHA_BLANCA').length}MB)
+                                    </span>
+                                )}
                             </CardDescription>
                         </div>
                     </div>
@@ -345,6 +376,11 @@ export default function ViewResultadosFinalesTable({ zona, mes, periodo }: ViewR
                                 <TableHead className="whitespace-nowrap px-2 py-2 border-b-2 border-emerald-600">
                                     <SortButton columnKey="agencia">AGENCIA</SortButton>
                                 </TableHead>
+                                {isV2 && (
+                                    <TableHead className="whitespace-nowrap px-2 py-2 border-b-2 border-emerald-500">
+                                        GESTIÓN
+                                    </TableHead>
+                                )}
                                 <TableHead className="whitespace-nowrap px-2 py-2 border-b-2 border-emerald-500">
                                     <SortButton columnKey="ruc">RUC</SortButton>
                                 </TableHead>
@@ -399,17 +435,27 @@ export default function ViewResultadosFinalesTable({ zona, mes, periodo }: ViewR
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {sortedData.map((row, index) => (
+                            {sortedData.map((row, index) => {
+                                const gStyle = isV2 && row.gestion ? GESTION_STYLES[row.gestion.toUpperCase()] : null;
+                                return (
                                 <TableRow 
-                                    key={row.ruc || index} 
+                                    key={`${row.ruc}-${row.gestion || 'legacy'}-${index}`} 
                                     className={`
                                         ${index % 2 === 0 ? 'bg-white dark:bg-slate-900' : 'bg-emerald-50/50 dark:bg-slate-800'}
                                         hover:bg-emerald-100/70 dark:hover:bg-slate-700
+                                        ${gStyle?.border || ''}
                                     `}
                                 >
                                     <TableCell className="text-sm px-2 py-2.5 whitespace-nowrap font-medium text-emerald-700 dark:text-emerald-400">
                                         {row.agencia}
                                     </TableCell>
+                                    {isV2 && (
+                                        <TableCell className="text-sm px-2 py-2.5 whitespace-nowrap">
+                                            {gStyle ? (
+                                                <Badge className={`text-xs ${gStyle.badge}`}>{gStyle.label}</Badge>
+                                            ) : '-'}
+                                        </TableCell>
+                                    )}
                                     <TableCell className="text-sm px-2 py-2.5 whitespace-nowrap text-muted-foreground">
                                         {row.ruc}
                                     </TableCell>
@@ -464,12 +510,13 @@ export default function ViewResultadosFinalesTable({ zona, mes, periodo }: ViewR
                                         {formatCurrency(row.resultado_neto_final)}
                                     </TableCell>
                                 </TableRow>
-                            ))}
+                                );
+                            })}
                         </TableBody>
                         {totals && (
                             <TableFooter className="sticky bottom-0 bg-gradient-to-r from-slate-200 to-slate-300 dark:from-slate-800 dark:to-slate-700">
                                 <TableRow className="font-bold">
-                                    <TableCell colSpan={2} className="text-right text-base">TOTALES:</TableCell>
+                                    <TableCell colSpan={isV2 ? 3 : 2} className="text-right text-base">TOTALES:</TableCell>
                                     <TableCell className="text-center text-base">{totals.totalAltas}</TableCell>
                                     <TableCell></TableCell>
                                     <TableCell className="text-right text-base text-blue-700 dark:text-blue-400">
