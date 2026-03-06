@@ -1,5 +1,6 @@
 "use client";
 
+import { use } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Icons } from "@/components/icons";
@@ -9,7 +10,6 @@ import BaseCalculo from "@/components/commissions/base-calculo";
 import ResultadoComision from "@/components/commissions/resultado-comision";
 import ResultadoComisionCorte2 from "@/components/commissions/resultado-comision-corte-2";
 
-// Helper to format the title from slug
 function formatTitle(slug: string) {
   if (!slug) return '';
   return slug
@@ -18,8 +18,8 @@ function formatTitle(slug: string) {
     .join(' ');
 }
 
-export default function CommissionCalculationPage({ params }: { params: { corte: string; zona: string; year: string; mes: string } }) {
-  const { corte, zona, year, mes } = params;
+export default function CommissionCalculationPage({ params }: { params: Promise<{ corte: string; zona: string; year: string; mes: string }> }) {
+  const { corte, zona, year, mes } = use(params);
 
   // Corte 1 y Corte 2 están implementados para Lima
   const isImplemented = (corte === 'corte-1' || corte === 'corte-2') && zona === 'lima';

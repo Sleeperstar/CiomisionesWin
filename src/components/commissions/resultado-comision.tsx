@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { ArrowUpDown, Save, CheckCircle2 } from 'lucide-react';
+import { ArrowUpDown, Save } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/lib/supabase';
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -15,17 +15,18 @@ const monthMap: { [key: string]: number } = {
     julio: 7, agosto: 8, septiembre: 9, octubre: 10, noviembre: 11, diciembre: 12
 };
 
-// Extraer número del corte de "corte-1" → 1
 const getCorteNumber = (corte: string): number => {
     const match = corte.match(/corte-(\d+)/i);
     return match ? parseInt(match[1], 10) : 1;
 };
 
-// Estructura para los datos agregados desde Supabase RPC
+const PERIODO_V2_INICIO = 202512;
+
 interface ComisionResumen {
+    gestion: string | null;
     ruc: string | null;
     agencia: string | null;
-    meta: number | null;  // null para marcha blanca
+    meta: number | null;
     top: string | null;
     altas: number;
     corte_1: number;
@@ -33,8 +34,7 @@ interface ComisionResumen {
     corte_3: number;
     corte_4: number;
     precio_sin_igv_promedio: number;
-    // Campos calculados
-    porcentaje_cumplimiento: number | null;  // null para marcha blanca
+    porcentaje_cumplimiento: number | null;
     marcha_blanca: string;
     bono_arpu: string;
     factor_multiplicador: number;
@@ -42,7 +42,6 @@ interface ComisionResumen {
     total_a_pagar: number;
 }
 
-// Interfaz para los totales
 interface Totals {
     totalAltas: number;
     totalMeta: number;
@@ -52,6 +51,24 @@ interface Totals {
     totalPagar: number;
 }
 
+const GESTION_STYLES: Record<string, { badge: string; border: string; label: string }> = {
+    VERTICAL: {
+        badge: 'bg-emerald-100 text-emerald-700 border border-emerald-400',
+        border: 'border-l-4 border-l-emerald-500',
+        label: 'Vertical',
+    },
+    HORIZONTAL: {
+        badge: 'bg-sky-100 text-sky-700 border border-sky-400',
+        border: 'border-l-4 border-l-sky-500',
+        label: 'Horizontal',
+    },
+    MARCHA_BLANCA: {
+        badge: 'bg-purple-100 text-purple-700 border border-purple-400',
+        border: 'border-l-4 border-l-purple-500',
+        label: 'M. Blanca',
+    },
+};
+
 export default function ResultadoComision({ corte, zona, mes, year = '2025' }: { corte: string; zona: string; mes: string; year?: string }) {
     const [data, setData] = useState<ComisionResumen[]>([]);
     const [loading, setLoading] = useState(true);
@@ -60,21 +77,25 @@ export default function ResultadoComision({ corte, zona, mes, year = '2025' }: {
     const [sortConfig, setSortConfig] = useState<{ key: keyof ComisionResumen; direction: 'ascending' | 'descending' } | null>(null);
     const [totals, setTotals] = useState<Totals | null>(null);
 
+    const corteNumber = getCorteNumber(corte);
+
+    const periodo = useMemo(() => {
+        const monthNumber = monthMap[mes];
+        const yearNumber = parseInt(year, 10);
+        return monthNumber ? (yearNumber * 100) + monthNumber : 0;
+    }, [mes, year]);
+
+    const isV2 = periodo >= PERIODO_V2_INICIO;
+
     const sortedData = useMemo(() => {
-        let sortableItems = [...data];
+        const sortableItems = [...data];
         if (sortConfig !== null) {
             sortableItems.sort((a, b) => {
                 const aValue = a[sortConfig.key];
                 const bValue = b[sortConfig.key];
-
                 if (aValue === null || bValue === null) return 0;
-
-                if (aValue < bValue) {
-                    return sortConfig.direction === 'ascending' ? -1 : 1;
-                }
-                if (aValue > bValue) {
-                    return sortConfig.direction === 'ascending' ? 1 : -1;
-                }
+                if (aValue < bValue) return sortConfig.direction === 'ascending' ? -1 : 1;
+                if (aValue > bValue) return sortConfig.direction === 'ascending' ? 1 : -1;
                 return 0;
             });
         }
@@ -89,45 +110,31 @@ export default function ResultadoComision({ corte, zona, mes, year = '2025' }: {
         setSortConfig({ key, direction });
     };
 
-    // Obtener número del corte seleccionado
-    const corteNumber = getCorteNumber(corte);
-
-    // Función para guardar resultados en Supabase
     const handleSaveResults = async () => {
         if (data.length === 0) {
-            toast({
-                title: "Sin datos",
-                description: "No hay datos para guardar.",
-                variant: "destructive"
-            });
+            toast({ title: "Sin datos", description: "No hay datos para guardar.", variant: "destructive" });
             return;
         }
 
         setSaving(true);
 
         try {
-            const monthNumber = monthMap[mes];
-            const yearNumber = parseInt(year, 10);
-            const periodo = (yearNumber * 100) + monthNumber;
-
-            // Por ahora solo implementamos Corte 1
-            // Los cortes 2, 3 y 4 tienen estructuras diferentes con penalidades y clawbacks
             if (corteNumber !== 1) {
                 toast({
                     title: "Corte no implementado",
-                    description: `El guardado del Corte ${corteNumber} aún no está implementado. Por favor usa Corte 1.`,
+                    description: `El guardado del Corte ${corteNumber} aún no está implementado.`,
                     variant: "destructive"
                 });
                 setSaving(false);
                 return;
             }
 
-            // Preparar datos para inserción en tabla resultado_comisiones_corte_1
             const dataToSave = data.map(row => ({
                 periodo,
                 zona: zona.toUpperCase(),
                 ruc: row.ruc || '',
                 agencia: row.agencia || '',
+                gestion: isV2 ? (row.gestion || null) : null,
                 meta: row.meta,
                 top: row.top || 'REGULAR',
                 altas: row.altas,
@@ -141,37 +148,37 @@ export default function ResultadoComision({ corte, zona, mes, year = '2025' }: {
                 bono_arpu: row.bono_arpu,
                 factor_multiplicador: row.factor_multiplicador,
                 multiplicador_final: row.multiplicador_final,
-                total_a_pagar_corte_1: row.total_a_pagar  // Renombrado para corte 1
+                total_a_pagar_corte_1: row.total_a_pagar
             }));
 
-            // Insertar o actualizar (upsert) en tabla de Corte 1
-            const { error } = await supabase
+            // Eliminar registros existentes del periodo/zona antes de insertar
+            const deleteFilter = supabase
                 .from('resultado_comisiones_corte_1')
-                .upsert(dataToSave, {
-                    onConflict: 'periodo,zona,ruc',
-                    ignoreDuplicates: false
-                });
+                .delete()
+                .eq('periodo', periodo)
+                .eq('zona', zona.toUpperCase());
 
-            if (error) {
-                throw new Error(`Error al guardar: ${error.message}`);
+            if (isV2) {
+                await deleteFilter.not('gestion', 'is', null);
+            } else {
+                await deleteFilter.is('gestion', null);
             }
 
+            const { error } = await supabase
+                .from('resultado_comisiones_corte_1')
+                .insert(dataToSave);
+
+            if (error) throw new Error(`Error al guardar: ${error.message}`);
+
             toast({
-                title: "✅ Resultados guardados",
+                title: "Resultados guardados",
                 description: `Se guardaron ${dataToSave.length} registros para ${mes.toUpperCase()} ${year} - Corte ${corteNumber} - ${zona.toUpperCase()}`,
                 duration: 5000
             });
 
-            console.log(`[Resultado Comision] ✅ Guardados ${dataToSave.length} registros en resultado_comisiones_corte_1`);
-
         } catch (error: unknown) {
-            console.error(`Error guardando resultados:`, error);
             const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
-            toast({
-                title: "Error al guardar",
-                description: errorMessage,
-                variant: "destructive"
-            });
+            toast({ title: "Error al guardar", description: errorMessage, variant: "destructive" });
         } finally {
             setSaving(false);
         }
@@ -191,35 +198,35 @@ export default function ResultadoComision({ corte, zona, mes, year = '2025' }: {
             }
 
             const yearNumber = parseInt(year, 10);
+            const currentPeriodo = (yearNumber * 100) + monthNumber;
+            const useV2 = currentPeriodo >= PERIODO_V2_INICIO;
 
             try {
-                // UNA SOLA CONSULTA: La función RPC calcula todo incluyendo % cumplimiento, factor y total
-                const { data: rpcData, error: rpcError } = await supabase.rpc('get_comisiones_resumen', {
+                const rpcName = useV2 ? 'get_comisiones_resumen_v2' : 'get_comisiones_resumen';
+                const { data: rpcData, error: rpcError } = await supabase.rpc(rpcName, {
                     p_zona: zona,
                     p_mes: monthNumber,
                     p_year: yearNumber,
-                    p_corte: corteNumber  // Nuevo parámetro: corte seleccionado
+                    p_corte: corteNumber
                 });
 
-                if (rpcError) {
-                    throw new Error(`Error en RPC: ${rpcError.message}`);
-                }
+                if (rpcError) throw new Error(`Error en RPC: ${rpcError.message}`);
 
-                // Mapear los datos directamente (ya vienen completos desde la BD)
-                const processedData: ComisionResumen[] = (rpcData || []).map((row: ComisionResumen) => ({
-                    ruc: row.ruc,
-                    agencia: row.agencia,
-                    meta: row.meta === null ? null : Number(row.meta),  // Preservar null para marcha blanca
-                    top: row.top || 'N/A',
+                const processedData: ComisionResumen[] = (rpcData || []).map((row: Record<string, unknown>) => ({
+                    gestion: useV2 ? (row.gestion as string || null) : null,
+                    ruc: row.ruc as string,
+                    agencia: row.agencia as string,
+                    meta: row.meta === null ? null : Number(row.meta),
+                    top: (row.top as string) || 'N/A',
                     altas: Number(row.altas) || 0,
                     corte_1: Number(row.corte_1) || 0,
                     corte_2: Number(row.corte_2) || 0,
                     corte_3: Number(row.corte_3) || 0,
                     corte_4: Number(row.corte_4) || 0,
                     precio_sin_igv_promedio: Number(row.precio_sin_igv_promedio) || 0,
-                    porcentaje_cumplimiento: row.porcentaje_cumplimiento === null ? null : Number(row.porcentaje_cumplimiento),  // Preservar null
-                    marcha_blanca: row.marcha_blanca || 'No',
-                    bono_arpu: row.bono_arpu || 'No',
+                    porcentaje_cumplimiento: row.porcentaje_cumplimiento === null ? null : Number(row.porcentaje_cumplimiento),
+                    marcha_blanca: (row.marcha_blanca as string) || 'No',
+                    bono_arpu: (row.bono_arpu as string) || 'No',
                     factor_multiplicador: Number(row.factor_multiplicador) || 1.3,
                     multiplicador_final: Number(row.multiplicador_final) || Number(row.factor_multiplicador) || 1.3,
                     total_a_pagar: Number(row.total_a_pagar) || 0
@@ -227,50 +234,42 @@ export default function ResultadoComision({ corte, zona, mes, year = '2025' }: {
 
                 setData(processedData);
 
-                // Obtener el corte seleccionado para los totales
-                const getCorteValue = (row: ComisionResumen) => {
+                const getCorteValue = (r: ComisionResumen) => {
                     switch (corteNumber) {
-                        case 1: return row.corte_1;
-                        case 2: return row.corte_2;
-                        case 3: return row.corte_3;
-                        case 4: return row.corte_4;
-                        default: return row.corte_1;
+                        case 1: return r.corte_1;
+                        case 2: return r.corte_2;
+                        case 3: return r.corte_3;
+                        case 4: return r.corte_4;
+                        default: return r.corte_1;
                     }
                 };
 
-                // Calcular totales (ignorando null para meta y % cumplimiento)
-                const totalAltas = processedData.reduce((sum, row) => sum + row.altas, 0);
-                const totalMeta = processedData.reduce((sum, row) => sum + (row.meta ?? 0), 0);
-                const totalCorteSeleccionado = processedData.reduce((sum, row) => sum + getCorteValue(row), 0);
-                const totalPrecio = processedData.reduce((sum, row) => sum + row.precio_sin_igv_promedio, 0);
+                const totalAltas = processedData.reduce((sum, r) => sum + r.altas, 0);
+                const totalMeta = processedData.reduce((sum, r) => sum + (r.meta ?? 0), 0);
+                const totalCorteSeleccionado = processedData.reduce((sum, r) => sum + getCorteValue(r), 0);
+                const totalPrecio = processedData.reduce((sum, r) => sum + r.precio_sin_igv_promedio, 0);
                 const avgPrecio = processedData.length > 0 ? totalPrecio / processedData.length : 0;
-                // Solo calcular promedio de % cumplimiento para agencias que no tienen marcha blanca
-                const agenciasSinMarchaBlanca = processedData.filter(row => row.porcentaje_cumplimiento !== null);
-                const totalCumplimiento = agenciasSinMarchaBlanca.reduce((sum, row) => sum + (row.porcentaje_cumplimiento ?? 0), 0);
-                const avgCumplimiento = agenciasSinMarchaBlanca.length > 0 ? totalCumplimiento / agenciasSinMarchaBlanca.length : 0;
-                const totalPagar = processedData.reduce((sum, row) => sum + row.total_a_pagar, 0);
+                const sinMarchaBlanca = processedData.filter(r => r.porcentaje_cumplimiento !== null);
+                const totalCumplimiento = sinMarchaBlanca.reduce((sum, r) => sum + (r.porcentaje_cumplimiento ?? 0), 0);
+                const avgCumplimiento = sinMarchaBlanca.length > 0 ? totalCumplimiento / sinMarchaBlanca.length : 0;
+                const totalPagar = processedData.reduce((sum, r) => sum + r.total_a_pagar, 0);
 
                 setTotals({ totalAltas, totalMeta, totalCorteSeleccionado, avgPrecio, avgCumplimiento, totalPagar });
 
-                console.log(`[Resultado Comision] ✅ Cargados ${processedData.length} registros para Corte ${corteNumber}`);
-
             } catch (error: unknown) {
-                console.error(`Error fetching comisiones:`, error);
                 const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
                 toast({ title: "Error", description: `No se pudieron cargar los datos: ${errorMessage}`, variant: "destructive" });
             }
-            
+
             setLoading(false);
         };
 
         fetchData();
     }, [corte, zona, mes, year, corteNumber, toast]);
 
-
-    // Componente para el botón de ordenar
     const SortButton = ({ columnKey, children }: { columnKey: keyof ComisionResumen; children: React.ReactNode }) => (
-        <Button 
-            variant="ghost" 
+        <Button
+            variant="ghost"
             onClick={() => requestSort(columnKey)}
             className="text-slate-700 dark:text-slate-200 hover:text-[#f53c00] hover:bg-orange-100/50 font-bold px-2 h-auto py-1"
         >
@@ -292,7 +291,6 @@ export default function ResultadoComision({ corte, zona, mes, year = '2025' }: {
         );
     }
 
-    // Función para obtener el valor del corte seleccionado
     const getCorteValue = (row: ComisionResumen) => {
         switch (corteNumber) {
             case 1: return row.corte_1;
@@ -303,7 +301,6 @@ export default function ResultadoComision({ corte, zona, mes, year = '2025' }: {
         }
     };
 
-    // Función para obtener el color del % cumplimiento
     const getCumplimientoColor = (pct: number) => {
         if (pct >= 100) return 'text-green-600 bg-green-100 dark:bg-green-900/30';
         if (pct >= 90) return 'text-blue-600 bg-blue-100 dark:bg-blue-900/30';
@@ -312,6 +309,13 @@ export default function ResultadoComision({ corte, zona, mes, year = '2025' }: {
         return 'text-red-600 bg-red-100 dark:bg-red-900/30';
     };
 
+    const getGestionStyle = (gestion: string | null) => {
+        if (!gestion) return null;
+        return GESTION_STYLES[gestion.toUpperCase()] || null;
+    };
+
+    const totalColumns = isV2 ? 15 : 13;
+
     return (
         <Card className="border-0 shadow-lg bg-gradient-to-br from-white to-orange-50/30 dark:from-slate-900 dark:to-slate-800 overflow-clip">
             <CardHeader className="pb-4 border-b text-white rounded-t-lg" style={{ background: 'linear-gradient(135deg, #f53c00 0%, #ff8300 50%, #ffa700 100%)' }}>
@@ -319,12 +323,26 @@ export default function ResultadoComision({ corte, zona, mes, year = '2025' }: {
                     <div>
                         <CardTitle className="text-xl font-bold tracking-tight">
                             Resultado de Comisiones - Corte {corteNumber}
+                            {isV2 && <span className="text-sm font-normal ml-2 opacity-80">(Gestión V/H/MB)</span>}
                         </CardTitle>
                         <CardDescription className="text-orange-100 mt-1">
-                            {data.length} agencias • {mes.charAt(0).toUpperCase() + mes.slice(1)} {year} • {zona.charAt(0).toUpperCase() + zona.slice(1)}
+                            {data.length} {isV2 ? 'registros' : 'agencias'} • {mes.charAt(0).toUpperCase() + mes.slice(1)} {year} • {zona.charAt(0).toUpperCase() + zona.slice(1)}
                         </CardDescription>
                     </div>
                     <div className="flex flex-wrap gap-2 items-center">
+                        {isV2 && (
+                            <>
+                                <Badge variant="secondary" className="bg-emerald-500/80 text-white border-emerald-400/40 px-2 py-1 text-xs">
+                                    V: {data.filter(r => r.gestion === 'VERTICAL').length}
+                                </Badge>
+                                <Badge variant="secondary" className="bg-sky-500/80 text-white border-sky-400/40 px-2 py-1 text-xs">
+                                    H: {data.filter(r => r.gestion === 'HORIZONTAL').length}
+                                </Badge>
+                                <Badge variant="secondary" className="bg-purple-500/80 text-white border-purple-400/40 px-2 py-1 text-xs">
+                                    MB: {data.filter(r => r.gestion === 'MARCHA_BLANCA').length}
+                                </Badge>
+                            </>
+                        )}
                         <Badge variant="secondary" className="bg-white/25 text-white border-white/40 px-3 py-1.5 font-semibold">
                             Altas: {totals?.totalAltas.toLocaleString('es-PE') || 0}
                         </Badge>
@@ -359,6 +377,11 @@ export default function ResultadoComision({ corte, zona, mes, year = '2025' }: {
                     <Table className="relative">
                         <TableHeader className="sticky top-0 bg-gradient-to-r from-orange-100 to-amber-100 dark:from-slate-800 dark:to-slate-700 z-1">
                             <TableRow className="hover:bg-orange-100 dark:hover:bg-slate-800">
+                                {isV2 && (
+                                    <TableHead className="whitespace-nowrap px-2 py-2 border-b-2 border-purple-500">
+                                        <SortButton columnKey="gestion">GESTIÓN</SortButton>
+                                    </TableHead>
+                                )}
                                 <TableHead className="whitespace-nowrap px-2 py-2 border-b-2 border-[#f53c00]">
                                     <SortButton columnKey="ruc">RUC</SortButton>
                                 </TableHead>
@@ -377,9 +400,11 @@ export default function ResultadoComision({ corte, zona, mes, year = '2025' }: {
                                 <TableHead className="whitespace-nowrap px-2 py-2 border-b-2 border-[#f53c00]">
                                     <SortButton columnKey="porcentaje_cumplimiento">% CUMPL.</SortButton>
                                 </TableHead>
-                                <TableHead className="whitespace-nowrap px-2 py-2 border-b-2 border-[#ff8300] text-center text-xs font-bold text-slate-600">
-                                    M.BLANCA
-                                </TableHead>
+                                {!isV2 && (
+                                    <TableHead className="whitespace-nowrap px-2 py-2 border-b-2 border-[#ff8300] text-center text-xs font-bold text-slate-600">
+                                        M.BLANCA
+                                    </TableHead>
+                                )}
                                 <TableHead className="whitespace-nowrap px-2 py-2 border-b-2 border-[#ffa700] text-center text-xs font-bold text-slate-600">
                                     BONO ARPU
                                 </TableHead>
@@ -403,7 +428,7 @@ export default function ResultadoComision({ corte, zona, mes, year = '2025' }: {
                         <TableBody>
                             {sortedData.length === 0 ? (
                                 <TableRow>
-                                    <TableCell colSpan={13} className="text-center py-12 text-muted-foreground">
+                                    <TableCell colSpan={totalColumns} className="text-center py-12 text-muted-foreground">
                                         <div className="flex flex-col items-center gap-2">
                                             <svg className="h-12 w-12 text-orange-200" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -413,104 +438,121 @@ export default function ResultadoComision({ corte, zona, mes, year = '2025' }: {
                                     </TableCell>
                                 </TableRow>
                             ) : (
-                                sortedData.map((row, index) => (
-                                    <TableRow 
-                                        key={row.ruc || index}
-                                        className={`
-                                            transition-colors duration-150
-                                            ${index % 2 === 0 ? 'bg-white dark:bg-slate-900' : 'bg-orange-50/40 dark:bg-slate-800/50'}
-                                            hover:bg-orange-100/60 dark:hover:bg-orange-900/20
-                                        `}
-                                    >
-                                        <TableCell className="font-mono text-xs px-2 py-2 whitespace-nowrap">{row.ruc}</TableCell>
-                                        <TableCell className="text-xs px-2 py-2 whitespace-nowrap max-w-[150px] truncate font-medium" title={row.agencia || ''}>
-                                            {row.agencia}
-                                        </TableCell>
-                                        <TableCell className="text-xs px-2 py-2 whitespace-nowrap text-center">
-                                            {row.meta === null ? (
-                                                <span className="text-slate-400 font-medium">-</span>
-                                            ) : (
-                                                <Badge variant="outline" className="border-[#ff8300] text-[#f53c00] font-semibold text-xs">
-                                                    {row.meta}
-                                                </Badge>
+                                sortedData.map((row, index) => {
+                                    const gestionStyle = getGestionStyle(row.gestion);
+                                    return (
+                                        <TableRow
+                                            key={`${row.ruc}-${row.gestion || 'legacy'}-${index}`}
+                                            className={`
+                                                transition-colors duration-150
+                                                ${gestionStyle ? gestionStyle.border : ''}
+                                                ${index % 2 === 0 ? 'bg-white dark:bg-slate-900' : 'bg-orange-50/40 dark:bg-slate-800/50'}
+                                                hover:bg-orange-100/60 dark:hover:bg-orange-900/20
+                                            `}
+                                        >
+                                            {isV2 && (
+                                                <TableCell className="text-xs px-2 py-2 whitespace-nowrap text-center">
+                                                    {gestionStyle ? (
+                                                        <Badge variant="secondary" className={`text-xs font-semibold ${gestionStyle.badge}`}>
+                                                            {gestionStyle.label}
+                                                        </Badge>
+                                                    ) : (
+                                                        <span className="text-slate-400">-</span>
+                                                    )}
+                                                </TableCell>
                                             )}
-                                        </TableCell>
-                                        <TableCell className="text-xs px-2 py-2 whitespace-nowrap text-center">
-                                            <Badge 
-                                                variant="secondary" 
-                                                className={`font-semibold text-xs ${
-                                                    row.top === 'GOLD' 
-                                                        ? 'bg-yellow-400/30 text-yellow-700 border border-yellow-500'
-                                                        : row.top === 'SILVER'
-                                                        ? 'bg-slate-300/30 text-slate-600 border border-slate-400'
-                                                        : 'bg-slate-100 text-slate-500'
-                                                }`}
-                                            >
-                                                {row.top}
-                                            </Badge>
-                                        </TableCell>
-                                        <TableCell className="text-sm px-2 py-2 whitespace-nowrap text-center">
-                                            <span className="font-bold text-[#f53c00]">{row.altas}</span>
-                                        </TableCell>
-                                        <TableCell className="text-xs px-2 py-2 whitespace-nowrap text-center">
-                                            {row.porcentaje_cumplimiento === null ? (
-                                                <span className="text-slate-400 font-medium">-</span>
-                                            ) : (
-                                                <Badge className={`font-bold text-xs ${getCumplimientoColor(row.porcentaje_cumplimiento)}`}>
-                                                    {row.porcentaje_cumplimiento.toFixed(1)}%
+                                            <TableCell className="font-mono text-xs px-2 py-2 whitespace-nowrap">{row.ruc}</TableCell>
+                                            <TableCell className="text-xs px-2 py-2 whitespace-nowrap max-w-[150px] truncate font-medium" title={row.agencia || ''}>
+                                                {row.agencia}
+                                            </TableCell>
+                                            <TableCell className="text-xs px-2 py-2 whitespace-nowrap text-center">
+                                                {row.meta === null ? (
+                                                    <span className="text-slate-400 font-medium">-</span>
+                                                ) : (
+                                                    <Badge variant="outline" className="border-[#ff8300] text-[#f53c00] font-semibold text-xs">
+                                                        {row.meta}
+                                                    </Badge>
+                                                )}
+                                            </TableCell>
+                                            <TableCell className="text-xs px-2 py-2 whitespace-nowrap text-center">
+                                                <Badge
+                                                    variant="secondary"
+                                                    className={`font-semibold text-xs ${
+                                                        row.top === 'GOLD'
+                                                            ? 'bg-yellow-400/30 text-yellow-700 border border-yellow-500'
+                                                            : row.top === 'SILVER'
+                                                            ? 'bg-slate-300/30 text-slate-600 border border-slate-400'
+                                                            : 'bg-slate-100 text-slate-500'
+                                                    }`}
+                                                >
+                                                    {row.top}
                                                 </Badge>
+                                            </TableCell>
+                                            <TableCell className="text-sm px-2 py-2 whitespace-nowrap text-center">
+                                                <span className="font-bold text-[#f53c00]">{row.altas}</span>
+                                            </TableCell>
+                                            <TableCell className="text-xs px-2 py-2 whitespace-nowrap text-center">
+                                                {row.porcentaje_cumplimiento === null ? (
+                                                    <span className="text-slate-400 font-medium">-</span>
+                                                ) : (
+                                                    <Badge className={`font-bold text-xs ${getCumplimientoColor(row.porcentaje_cumplimiento)}`}>
+                                                        {row.porcentaje_cumplimiento.toFixed(1)}%
+                                                    </Badge>
+                                                )}
+                                            </TableCell>
+                                            {!isV2 && (
+                                                <TableCell className="text-xs px-2 py-2 whitespace-nowrap text-center">
+                                                    <Badge
+                                                        variant="secondary"
+                                                        className={`text-xs ${
+                                                            row.marcha_blanca.toUpperCase() === 'SÍ' || row.marcha_blanca.toUpperCase() === 'SI'
+                                                                ? 'bg-purple-100 text-purple-700 border border-purple-400'
+                                                                : 'bg-slate-100 text-slate-400'
+                                                        }`}
+                                                    >
+                                                        {row.marcha_blanca}
+                                                    </Badge>
+                                                </TableCell>
                                             )}
-                                        </TableCell>
-                                        <TableCell className="text-xs px-2 py-2 whitespace-nowrap text-center">
-                                            <Badge 
-                                                variant="secondary"
-                                                className={`text-xs ${
-                                                    row.marcha_blanca.toUpperCase() === 'SÍ' || row.marcha_blanca.toUpperCase() === 'SI'
-                                                        ? 'bg-purple-100 text-purple-700 border border-purple-400'
-                                                        : 'bg-slate-100 text-slate-400'
-                                                }`}
-                                            >
-                                                {row.marcha_blanca}
-                                            </Badge>
-                                        </TableCell>
-                                        <TableCell className="text-xs px-2 py-2 whitespace-nowrap text-center">
-                                            <Badge 
-                                                variant="secondary"
-                                                className={`text-xs ${
-                                                    row.bono_arpu.toUpperCase() === 'SÍ' || row.bono_arpu.toUpperCase() === 'SI'
-                                                        ? 'bg-blue-100 text-blue-700 border border-blue-400'
-                                                        : 'bg-slate-100 text-slate-400'
-                                                }`}
-                                            >
-                                                {row.bono_arpu}
-                                            </Badge>
-                                        </TableCell>
-                                        <TableCell className="text-xs px-2 py-2 whitespace-nowrap text-center font-bold text-[#ff8300]">
-                                            x{row.factor_multiplicador.toFixed(1)}
-                                        </TableCell>
-                                        <TableCell className="text-xs px-2 py-2 whitespace-nowrap text-center">
-                                            <span className={`font-bold ${row.multiplicador_final > row.factor_multiplicador ? 'text-green-600' : 'text-slate-600'}`}>
-                                                x{row.multiplicador_final.toFixed(1)}
-                                            </span>
-                                        </TableCell>
-                                        <TableCell className="text-sm px-2 py-2 whitespace-nowrap text-center font-medium">
-                                            {getCorteValue(row)}
-                                        </TableCell>
-                                        <TableCell className="text-xs px-2 py-2 whitespace-nowrap text-right font-mono">
-                                            S/ {row.precio_sin_igv_promedio.toFixed(2)}
-                                        </TableCell>
-                                        <TableCell className="text-xs px-2 py-2 whitespace-nowrap text-right">
-                                            <span className="font-bold text-green-600 dark:text-green-400">
-                                                S/ {row.total_a_pagar.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
-                                            </span>
-                                        </TableCell>
-                                    </TableRow>
-                                ))
+                                            <TableCell className="text-xs px-2 py-2 whitespace-nowrap text-center">
+                                                <Badge
+                                                    variant="secondary"
+                                                    className={`text-xs ${
+                                                        row.bono_arpu.toUpperCase() === 'SÍ' || row.bono_arpu.toUpperCase() === 'SI'
+                                                            ? 'bg-blue-100 text-blue-700 border border-blue-400'
+                                                            : 'bg-slate-100 text-slate-400'
+                                                    }`}
+                                                >
+                                                    {row.bono_arpu}
+                                                </Badge>
+                                            </TableCell>
+                                            <TableCell className="text-xs px-2 py-2 whitespace-nowrap text-center font-bold text-[#ff8300]">
+                                                x{row.factor_multiplicador.toFixed(1)}
+                                            </TableCell>
+                                            <TableCell className="text-xs px-2 py-2 whitespace-nowrap text-center">
+                                                <span className={`font-bold ${row.multiplicador_final > row.factor_multiplicador ? 'text-green-600' : 'text-slate-600'}`}>
+                                                    x{row.multiplicador_final.toFixed(1)}
+                                                </span>
+                                            </TableCell>
+                                            <TableCell className="text-sm px-2 py-2 whitespace-nowrap text-center font-medium">
+                                                {getCorteValue(row)}
+                                            </TableCell>
+                                            <TableCell className="text-xs px-2 py-2 whitespace-nowrap text-right font-mono">
+                                                S/ {row.precio_sin_igv_promedio.toFixed(2)}
+                                            </TableCell>
+                                            <TableCell className="text-xs px-2 py-2 whitespace-nowrap text-right">
+                                                <span className="font-bold text-green-600 dark:text-green-400">
+                                                    S/ {row.total_a_pagar.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                                                </span>
+                                            </TableCell>
+                                        </TableRow>
+                                    );
+                                })
                             )}
                         </TableBody>
                         <TableFooter className="sticky bottom-0 bg-gradient-to-r from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-700">
                             <TableRow className="font-bold">
-                                <TableCell colSpan={2} className="text-right px-2 py-2 text-slate-700 dark:text-slate-200 text-xs">
+                                <TableCell colSpan={isV2 ? 3 : 2} className="text-right px-2 py-2 text-slate-700 dark:text-slate-200 text-xs">
                                     TOTALES
                                 </TableCell>
                                 <TableCell className="text-center px-2 py-2">
@@ -523,7 +565,7 @@ export default function ResultadoComision({ corte, zona, mes, year = '2025' }: {
                                 <TableCell className="text-center px-2 py-2 text-slate-700 dark:text-slate-200 text-xs">
                                     {totals?.avgCumplimiento.toFixed(1)}%
                                 </TableCell>
-                                <TableCell className="text-center px-2 py-2 text-slate-400 text-xs">-</TableCell>
+                                {!isV2 && <TableCell className="text-center px-2 py-2 text-slate-400 text-xs">-</TableCell>}
                                 <TableCell className="text-center px-2 py-2 text-slate-400 text-xs">-</TableCell>
                                 <TableCell className="text-center px-2 py-2 text-slate-400 text-xs">-</TableCell>
                                 <TableCell className="text-center px-2 py-2 text-slate-400 text-xs">-</TableCell>

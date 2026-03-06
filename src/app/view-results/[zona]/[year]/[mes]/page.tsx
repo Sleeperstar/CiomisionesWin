@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { use, useState, useEffect } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Icons } from "@/components/icons";
@@ -31,8 +31,8 @@ interface CorteCounts {
   finales: number;
 }
 
-export default function ViewResultsPage({ params }: { params: { zona: string; year: string; mes: string } }) {
-  const { zona, year, mes } = params;
+export default function ViewResultsPage({ params }: { params: Promise<{ zona: string; year: string; mes: string }> }) {
+  const { zona, year, mes } = use(params);
   const { toast } = useToast();
   const [counts, setCounts] = useState<CorteCounts>({ corte1: 0, corte2: 0, corte3: 0, corte4: 0, finales: 0 });
   const [loading, setLoading] = useState(true);

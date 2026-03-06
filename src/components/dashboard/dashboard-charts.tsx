@@ -466,8 +466,8 @@ export default function DashboardCharts() {
                                         </SelectTrigger>
                                         <SelectContent className="max-h-[300px]">
                                             <SelectItem value="todas">Todas las agencias</SelectItem>
-                                            {agenciasDisponibles.map((agencia) => (
-                                                <SelectItem key={agencia.ruc} value={agencia.ruc}>
+                                            {agenciasDisponibles.map((agencia, idx) => (
+                                                <SelectItem key={`${agencia.ruc}-${idx}`} value={agencia.ruc}>
                                                     <div className="flex flex-col">
                                                         <span>{agencia.agencia}</span>
                                                         <span className="text-xs text-muted-foreground">{agencia.total_altas} altas</span>
@@ -794,7 +794,7 @@ export default function DashboardCharts() {
                                     .sort((a, b) => b.total_descuentos - a.total_descuentos)
                                     .slice(0, 5)
                                     .map((agencia, index) => (
-                                        <div key={agencia.ruc} className="flex items-center gap-4 p-4 rounded-lg bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+                                        <div key={`${agencia.ruc}-${agencia.periodo}-${index}`} className="flex items-center gap-4 p-4 rounded-lg bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
                                             <div className={`flex items-center justify-center w-10 h-10 rounded-full font-bold text-white ${
                                                 index === 0 ? 'bg-red-500' : index === 1 ? 'bg-orange-500' : 'bg-yellow-500'
                                             }`}>
@@ -852,7 +852,7 @@ export default function DashboardCharts() {
                     <CardContent className="pt-6">
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                             {filteredData.map((agencia) => (
-                                <React.Fragment key={agencia.ruc}>
+                                <React.Fragment key={`${agencia.ruc}-${agencia.periodo}`}>
                                     <div className="p-4 rounded-lg bg-blue-50 dark:bg-blue-900/20">
                                         <p className="text-sm text-muted-foreground">Comisión Bruta</p>
                                         <p className="text-xl font-bold text-blue-600">{formatCurrencyFull(agencia.comision_total)}</p>
@@ -878,7 +878,7 @@ export default function DashboardCharts() {
                         </div>
                         <div className="mt-6 grid grid-cols-2 md:grid-cols-3 gap-4">
                             {filteredData.map((agencia) => (
-                                <React.Fragment key={agencia.ruc + '-details'}>
+                                <React.Fragment key={`${agencia.ruc}-${agencia.periodo}-details`}>
                                     <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-800/50">
                                         <p className="text-xs text-muted-foreground">Altas Totales</p>
                                         <p className="text-lg font-semibold">{agencia.altas}</p>

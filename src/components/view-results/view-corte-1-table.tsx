@@ -11,8 +11,11 @@ import { Icons } from "@/components/icons";
 import { Badge } from "@/components/ui/badge";
 import * as XLSX from 'xlsx';
 
+const PERIODO_V2_INICIO = 202512;
+
 interface Corte1Data {
     id: number;
+    gestion: string | null;
     ruc: string;
     agencia: string;
     meta: number | null;
@@ -37,14 +40,34 @@ interface Props {
     periodo: number;
 }
 
+const GESTION_STYLES: Record<string, { badge: string; border: string; label: string }> = {
+    VERTICAL: {
+        badge: 'bg-emerald-100 text-emerald-700 border border-emerald-400',
+        border: 'border-l-4 border-l-emerald-500',
+        label: 'Vertical',
+    },
+    HORIZONTAL: {
+        badge: 'bg-sky-100 text-sky-700 border border-sky-400',
+        border: 'border-l-4 border-l-sky-500',
+        label: 'Horizontal',
+    },
+    MARCHA_BLANCA: {
+        badge: 'bg-purple-100 text-purple-700 border border-purple-400',
+        border: 'border-l-4 border-l-purple-500',
+        label: 'M. Blanca',
+    },
+};
+
 export default function ViewCorte1Table({ zona, mes, periodo }: Props) {
     const [data, setData] = useState<Corte1Data[]>([]);
     const [loading, setLoading] = useState(true);
     const { toast } = useToast();
     const [sortConfig, setSortConfig] = useState<{ key: keyof Corte1Data; direction: 'ascending' | 'descending' } | null>(null);
 
+    const isV2 = periodo >= PERIODO_V2_INICIO;
+
     const sortedData = useMemo(() => {
-        let sortableItems = [...data];
+        const sortableItems = [...data];
         if (sortConfig !== null) {
             sortableItems.sort((a, b) => {
                 const aValue = a[sortConfig.key];
@@ -72,31 +95,34 @@ export default function ViewCorte1Table({ zona, mes, periodo }: Props) {
             return;
         }
 
-        const exportData = data.map(row => ({
-            'RUC': row.ruc,
-            'AGENCIA': row.agencia,
-            'META': row.meta || '-',
-            'TOP': row.top,
-            'ALTAS': row.altas,
-            'CORTE_1': row.corte_1,
-            'CORTE_2': row.corte_2,
-            'CORTE_3': row.corte_3,
-            'CORTE_4': row.corte_4,
-            'PRECIO_SIN_IGV_PROM': row.precio_sin_igv_promedio,
-            '%_CUMPLIMIENTO': row.porcentaje_cumplimiento !== null ? row.porcentaje_cumplimiento : '-',
-            'MARCHA_BLANCA': row.marcha_blanca,
-            'BONO_ARPU': row.bono_arpu,
-            'FACTOR_MULT': row.factor_multiplicador,
-            'MULT_FINAL': row.multiplicador_final,
-            'TOTAL_A_PAGAR_C1': row.total_a_pagar_corte_1
-        }));
+        const exportData = data.map(row => {
+            const base: Record<string, unknown> = {};
+            if (isV2) base['GESTION'] = row.gestion || '-';
+            base['RUC'] = row.ruc;
+            base['AGENCIA'] = row.agencia;
+            base['META'] = row.meta || '-';
+            base['TOP'] = row.top;
+            base['ALTAS'] = row.altas;
+            base['CORTE_1'] = row.corte_1;
+            base['CORTE_2'] = row.corte_2;
+            base['CORTE_3'] = row.corte_3;
+            base['CORTE_4'] = row.corte_4;
+            base['PRECIO_SIN_IGV_PROM'] = row.precio_sin_igv_promedio;
+            base['%_CUMPLIMIENTO'] = row.porcentaje_cumplimiento !== null ? row.porcentaje_cumplimiento : '-';
+            if (!isV2) base['MARCHA_BLANCA'] = row.marcha_blanca;
+            base['BONO_ARPU'] = row.bono_arpu;
+            base['FACTOR_MULT'] = row.factor_multiplicador;
+            base['MULT_FINAL'] = row.multiplicador_final;
+            base['TOTAL_A_PAGAR_C1'] = row.total_a_pagar_corte_1;
+            return base;
+        });
 
         const ws = XLSX.utils.json_to_sheet(exportData);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'Corte 1');
         XLSX.writeFile(wb, `Corte1_${zona.toUpperCase()}_${mes}_${periodo}.xlsx`);
 
-        toast({ title: "✅ Descarga completada", description: `${data.length} registros exportados.` });
+        toast({ title: "Descarga completada", description: `${data.length} registros exportados.` });
     };
 
     useEffect(() => {
@@ -130,6 +156,7 @@ export default function ViewCorte1Table({ zona, mes, periodo }: Props) {
 
     const totalPagar = data.reduce((sum, r) => sum + (r.total_a_pagar_corte_1 || 0), 0);
     const totalAltas = data.reduce((sum, r) => sum + r.altas, 0);
+    const totalColumns = 10;
 
     if (loading) {
         return (
@@ -142,17 +169,38 @@ export default function ViewCorte1Table({ zona, mes, periodo }: Props) {
         );
     }
 
+    const getGestionStyle = (gestion: string | null) => {
+        if (!gestion) return null;
+        return GESTION_STYLES[gestion.toUpperCase()] || null;
+    };
+
     return (
         <Card className="border-0 shadow-lg bg-gradient-to-br from-white to-orange-50/30 dark:from-slate-900 dark:to-slate-800 overflow-clip">
             <CardHeader className="pb-4 border-b text-white rounded-t-lg" style={{ background: 'linear-gradient(135deg, #f53c00 0%, #ff8300 50%, #ffa700 100%)' }}>
                 <div className="flex items-center justify-between flex-wrap gap-4">
                     <div>
-                        <CardTitle className="text-xl font-bold">Corte 1 - Solo Comisión</CardTitle>
+                        <CardTitle className="text-xl font-bold">
+                            Corte 1 - Solo Comisión
+                            {isV2 && <span className="text-sm font-normal ml-2 opacity-80">(Gestión V/H/MB)</span>}
+                        </CardTitle>
                         <CardDescription className="text-orange-100 mt-1">
-                            {data.length} agencias • Periodo {periodo}
+                            {data.length} {isV2 ? 'registros' : 'agencias'} • Periodo {periodo}
                         </CardDescription>
                     </div>
                     <div className="flex gap-2 items-center">
+                        {isV2 && (
+                            <>
+                                <Badge className="bg-emerald-500/80 text-white border-emerald-400/40 text-xs py-0.5">
+                                    V: {data.filter(r => r.gestion === 'VERTICAL').length}
+                                </Badge>
+                                <Badge className="bg-sky-500/80 text-white border-sky-400/40 text-xs py-0.5">
+                                    H: {data.filter(r => r.gestion === 'HORIZONTAL').length}
+                                </Badge>
+                                <Badge className="bg-purple-500/80 text-white border-purple-400/40 text-xs py-0.5">
+                                    MB: {data.filter(r => r.gestion === 'MARCHA_BLANCA').length}
+                                </Badge>
+                            </>
+                        )}
                         <Badge className="bg-white/20 text-white border-white/40 text-sm py-1">
                             Total: S/ {totalPagar.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
                         </Badge>
@@ -168,6 +216,9 @@ export default function ViewCorte1Table({ zona, mes, periodo }: Props) {
                     <Table className="text-xs">
                         <TableHeader className="sticky top-0 bg-gradient-to-r from-orange-100 to-amber-100 dark:from-slate-800 dark:to-slate-700 z-1">
                             <TableRow>
+                                {isV2 && (
+                                    <TableHead className="px-2 py-2"><SortButton columnKey="gestion">GESTIÓN</SortButton></TableHead>
+                                )}
                                 <TableHead className="px-2 py-2"><SortButton columnKey="ruc">RUC</SortButton></TableHead>
                                 <TableHead className="px-2 py-2"><SortButton columnKey="agencia">AGENCIA</SortButton></TableHead>
                                 <TableHead className="px-2 py-2"><SortButton columnKey="meta">META</SortButton></TableHead>
@@ -175,53 +226,77 @@ export default function ViewCorte1Table({ zona, mes, periodo }: Props) {
                                 <TableHead className="px-2 py-2"><SortButton columnKey="altas">ALTAS</SortButton></TableHead>
                                 <TableHead className="px-2 py-2"><SortButton columnKey="corte_1">C1</SortButton></TableHead>
                                 <TableHead className="px-2 py-2"><SortButton columnKey="porcentaje_cumplimiento">% CUMPL.</SortButton></TableHead>
-                                <TableHead className="px-2 py-2"><SortButton columnKey="marcha_blanca">M.BLANCA</SortButton></TableHead>
-                                <TableHead className="px-2 py-2"><SortButton columnKey="multiplicador_final">MULT.</SortButton></TableHead>
-                                <TableHead className="px-2 py-2"><SortButton columnKey="total_a_pagar_corte_1">TOTAL C1</SortButton></TableHead>
+                                {!isV2 && (
+                                    <TableHead className="px-2 py-2"><SortButton columnKey="marcha_blanca">M.BLANCA</SortButton></TableHead>
+                                )}
+                                <TableHead className="px-2 py-2 text-center"><SortButton columnKey="multiplicador_final">MULT.</SortButton></TableHead>
+                                <TableHead className="px-2 py-2 text-right"><SortButton columnKey="total_a_pagar_corte_1">TOTAL C1</SortButton></TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
                             {data.length === 0 && (
                                 <TableRow>
-                                    <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
+                                    <TableCell colSpan={totalColumns} className="text-center py-8 text-muted-foreground">
                                         No hay datos para este periodo y zona.
                                     </TableCell>
                                 </TableRow>
                             )}
-                            {sortedData.map((row, index) => (
-                                <TableRow key={row.id} className={index % 2 === 0 ? 'bg-white dark:bg-slate-900' : 'bg-orange-50/50 dark:bg-slate-800/50'}>
-                                    <TableCell className="px-2 py-2 font-mono">{row.ruc}</TableCell>
-                                    <TableCell className="px-2 py-2 max-w-[150px] truncate" title={row.agencia}>{row.agencia}</TableCell>
-                                    <TableCell className="px-2 py-2 text-center">{row.meta !== null ? row.meta : '-'}</TableCell>
-                                    <TableCell className="px-2 py-2 text-center">
-                                        <Badge variant="outline" className={
-                                            row.top === 'GOLD' ? 'border-yellow-500 text-yellow-600' :
-                                            row.top === 'SILVER' ? 'border-gray-400 text-gray-500' :
-                                            'border-orange-400 text-orange-500'
-                                        }>{row.top}</Badge>
-                                    </TableCell>
-                                    <TableCell className="px-2 py-2 text-center font-bold text-orange-600">{row.altas}</TableCell>
-                                    <TableCell className="px-2 py-2 text-center">{row.corte_1}</TableCell>
-                                    <TableCell className="px-2 py-2 text-center">
-                                        {row.porcentaje_cumplimiento !== null ? `${row.porcentaje_cumplimiento.toFixed(1)}%` : '-'}
-                                    </TableCell>
-                                    <TableCell className="px-2 py-2 text-center">
-                                        <Badge className={row.marcha_blanca === 'Sí' ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-slate-500'}>
-                                            {row.marcha_blanca}
-                                        </Badge>
-                                    </TableCell>
-                                    <TableCell className="px-2 py-2 text-center font-bold text-orange-500">x{row.multiplicador_final.toFixed(1)}</TableCell>
-                                    <TableCell className="px-2 py-2 text-right font-mono font-bold text-green-600">
-                                        S/ {row.total_a_pagar_corte_1.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
-                                    </TableCell>
-                                </TableRow>
-                            ))}
+                            {sortedData.map((row, index) => {
+                                const gestionStyle = getGestionStyle(row.gestion);
+                                return (
+                                    <TableRow
+                                        key={row.id}
+                                        className={`
+                                            ${gestionStyle ? gestionStyle.border : ''}
+                                            ${index % 2 === 0 ? 'bg-white dark:bg-slate-900' : 'bg-orange-50/50 dark:bg-slate-800/50'}
+                                        `}
+                                    >
+                                        {isV2 && (
+                                            <TableCell className="px-2 py-2 text-center">
+                                                {gestionStyle ? (
+                                                    <Badge variant="secondary" className={`text-xs font-semibold ${gestionStyle.badge}`}>
+                                                        {gestionStyle.label}
+                                                    </Badge>
+                                                ) : (
+                                                    <span className="text-slate-400">-</span>
+                                                )}
+                                            </TableCell>
+                                        )}
+                                        <TableCell className="px-2 py-2 font-mono">{row.ruc}</TableCell>
+                                        <TableCell className="px-2 py-2 max-w-[150px] truncate" title={row.agencia}>{row.agencia}</TableCell>
+                                        <TableCell className="px-2 py-2 text-center">{row.meta !== null ? row.meta : '-'}</TableCell>
+                                        <TableCell className="px-2 py-2 text-center">
+                                            <Badge variant="outline" className={
+                                                row.top === 'GOLD' ? 'border-yellow-500 text-yellow-600' :
+                                                row.top === 'SILVER' ? 'border-gray-400 text-gray-500' :
+                                                'border-orange-400 text-orange-500'
+                                            }>{row.top}</Badge>
+                                        </TableCell>
+                                        <TableCell className="px-2 py-2 text-center font-bold text-orange-600">{row.altas}</TableCell>
+                                        <TableCell className="px-2 py-2 text-center">{row.corte_1}</TableCell>
+                                        <TableCell className="px-2 py-2 text-center">
+                                            {row.porcentaje_cumplimiento !== null ? `${row.porcentaje_cumplimiento.toFixed(1)}%` : '-'}
+                                        </TableCell>
+                                        {!isV2 && (
+                                            <TableCell className="px-2 py-2 text-center">
+                                                <Badge className={row.marcha_blanca === 'Sí' ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-slate-500'}>
+                                                    {row.marcha_blanca}
+                                                </Badge>
+                                            </TableCell>
+                                        )}
+                                        <TableCell className="px-2 py-2 text-center font-bold text-orange-500">x{row.multiplicador_final.toFixed(1)}</TableCell>
+                                        <TableCell className="px-2 py-2 text-right font-mono font-bold text-green-600">
+                                            S/ {row.total_a_pagar_corte_1.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                                        </TableCell>
+                                    </TableRow>
+                                );
+                            })}
                         </TableBody>
                         <TableFooter className="sticky bottom-0 bg-gradient-to-r from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-700">
                             <TableRow className="font-bold">
-                                <TableCell colSpan={4}>TOTALES</TableCell>
+                                <TableCell colSpan={isV2 ? 5 : 4}>TOTALES</TableCell>
                                 <TableCell className="text-center text-orange-600">{totalAltas}</TableCell>
-                                <TableCell colSpan={4}></TableCell>
+                                <TableCell colSpan={isV2 ? 3 : 4}></TableCell>
                                 <TableCell className="text-right font-mono text-green-600">
                                     S/ {totalPagar.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
                                 </TableCell>
@@ -233,4 +308,3 @@ export default function ViewCorte1Table({ zona, mes, periodo }: Props) {
         </Card>
     );
 }
-

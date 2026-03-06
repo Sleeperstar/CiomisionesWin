@@ -342,6 +342,17 @@ REGLAS DE NEGOCIO:
 
 export async function POST(req: NextRequest) {
   try {
+    // Verificar que la API key de OpenAI está configurada
+    if (!process.env.OPENAI_API_KEY) {
+      return NextResponse.json(
+        {
+          error: 'OPENAI_API_KEY no configurada',
+          details: 'Agrega OPENAI_API_KEY en tu archivo .env.local para usar el chatbot. Ejemplo: OPENAI_API_KEY=sk-...',
+        },
+        { status: 503 }
+      );
+    }
+
     const { message, conversationHistory = [] } = await req.json();
 
     if (!message) {

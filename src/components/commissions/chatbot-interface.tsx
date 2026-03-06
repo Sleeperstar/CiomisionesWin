@@ -369,7 +369,9 @@ export default function ChatbotInterface() {
       });
 
       if (!response.ok) {
-        throw new Error('Error en la respuesta del servidor');
+        const errorData = await response.json().catch(() => ({}));
+        const errorMsg = errorData.details || errorData.error || `Error del servidor (${response.status})`;
+        throw new Error(errorMsg);
       }
 
       const data = await response.json();
