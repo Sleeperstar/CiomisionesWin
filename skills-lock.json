@@ -4,7 +4,12 @@
     "brainstorming": {
       "source": "obra/superpowers",
       "sourceType": "github",
-      "computedHash": "5cafa1558b0b6bd4d4c71f23d5567b7fcbbcdb4b0a50b0c5f69a80a3cebaf9b8"
+      "computedHash": "91fefe5ab922b18ffaeb0425f6909aa5e951df5e3e2dc29a61aeed67e661a0e6"
+    },
+    "interface-design": {
+      "source": "dammyjay93/interface-design",
+      "sourceType": "github",
+      "computedHash": "4d5fe1dacfebc0c1b3837b061405150ed2e4971c096543afc46c23161c5a4f7a"
     }
   }
 }

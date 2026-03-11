@@ -1,19 +1,58 @@
 import { z } from 'zod';
 
-export const agencyFormSchema = z.object({
-  agencyName: z.string().min(2, { message: "El nombre de la agencia debe tener al menos 2 caracteres." }).max(100),
-  contactPerson: z.string().min(2).max(100).optional(),
-  email: z.string().email({ message: "Dirección de correo electrónico inválida." }),
-  phone: z.string().min(10, { message: "El número de teléfono debe tener al menos 10 dígitos." }).max(15).optional(),
-  addressLine1: z.string().min(5).max(100),
-  addressLine2: z.string().max(100).optional(),
-  city: z.string().min(2).max(50),
-  state: z.string().min(2).max(50),
-  zipCode: z.string().min(3).max(10),
-  country: z.string().min(2).max(50),
+// --- Agencias ---
+
+export interface Agencia {
+  ruc: string;
+  razon_social: string;
+  nombre_comercial: string | null;
+  tipo_agencia: 'AGENCIA EXTERNA' | 'CALL EXTERNO' | null;
+  domicilio_fiscal: string | null;
+  condicion: 'BAJA' | 'ACTIVO' | 'PENDIENTE' | null;
+  mes_cese: string | null;
+  fecha_inicio_operaciones: string | null;
+  inicio_vigencia: string | null;
+  fin_vigencia: string | null;
+  carta_fianza: 'SI' | 'NO' | null;
+  vencimiento_carta_fianza: string | null;
+  alcance: string | null;
+  supervisor: string | null;
+  comentario: string | null;
+  fecha_comentario: string | null;
+  correos: string[] | null;
+  rep_legal_dni: string | null;
+  rep_legal_nombre: string | null;
+  rep_legal_correo: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AgenciaView extends Agencia {
+  dias_vencimiento: number | null;
+  vigencia_contrato: 'VIGENTE' | 'NO VIGENTE' | null;
+}
+
+export const agenciaEditSchema = z.object({
+  razon_social: z.string().min(2, "La razón social es requerida"),
+  nombre_comercial: z.string().nullable().optional(),
+  tipo_agencia: z.enum(['AGENCIA EXTERNA', 'CALL EXTERNO']).nullable().optional(),
+  domicilio_fiscal: z.string().nullable().optional(),
+  condicion: z.enum(['BAJA', 'ACTIVO', 'PENDIENTE']).nullable().optional(),
+  mes_cese: z.string().nullable().optional(),
+  fecha_inicio_operaciones: z.string().nullable().optional(),
+  inicio_vigencia: z.string().nullable().optional(),
+  carta_fianza: z.enum(['SI', 'NO']).nullable().optional(),
+  vencimiento_carta_fianza: z.string().nullable().optional(),
+  alcance: z.string().nullable().optional(),
+  supervisor: z.string().nullable().optional(),
+  comentario: z.string().nullable().optional(),
+  correos_input: z.string().optional(),
+  rep_legal_dni: z.string().nullable().optional(),
+  rep_legal_nombre: z.string().nullable().optional(),
+  rep_legal_correo: z.string().nullable().optional(),
 });
 
-export type AgencyFormValues = z.infer<typeof agencyFormSchema>;
+export type AgenciaEditFormValues = z.infer<typeof agenciaEditSchema>;
 
 export const smartValidationSchema = z.object({
   salesRecord: z.string().refine(
